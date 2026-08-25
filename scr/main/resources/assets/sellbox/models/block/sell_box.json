@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "sellbox:block/sellbox_top",
+    "up": "sellbox:block/sellbox_top",
+    "down": "sellbox:block/sellbox_bottom",
+    "north": "sellbox:block/sellbox_front",
+    "south": "sellbox:block/sellbox_back",
+    "east": "sellbox:block/sellbox_right",
+    "west": "sellbox:block/sellbox_left"
+  }
+}

@@ -1,12 +1,13 @@
 <div align="center">
 
-# SellBox - 出货箱
+# SellBoxShop - 出货箱
 
-**一个功能丰富的 Minecraft Forge 1.20.1 经济与交易模组**
+**一个功能丰富的 Minecraft 经济与交易模组，支持 Forge 1.20.1 与 NeoForge 1.21.1**
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1%20%7C%201.21.1-green)](https://www.minecraft.net/)
 [![Forge](https://img.shields.io/badge/Forge-47.4.20-orange)](https://files.minecraftforge.net/)
-[![Java](https://img.shields.io/badge/Java-17-blue)](https://adoptium.net/)
+[![NeoForge](https://img.shields.io/badge/NeoForge-21.1.x-orange)](https://neoforged.net/)
+[![Java](https://img.shields.io/badge/Java-17%20%7C%2021-blue)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red)](LICENSE.txt)
 
 </div>
@@ -106,8 +107,8 @@
 
 ## 安装
 
-1. 安装 [Minecraft Forge 1.20.1](https://files.minecraftforge.net/)
-2. 下载最新的 `SellBox-SDMShop-*-Forge-1.20.1.jar`
+1. 安装 [Minecraft Forge 1.20.1](https://files.minecraftforge.net/)（Java 17）或 [NeoForge 1.21.1](https://neoforged.net/)（Java 21）
+2. 到 [Releases](https://github.com/XiChen03/SellBoxShop/releases) 下载对应版本的 jar：`SellBoxShop-1.5.3-Forge-1.20.1.jar` 或 `SellBoxShop-1.5.3-NeoForge-1.21.1.jar`
 3. 将 JAR 文件放入 `.minecraft/mods/` 目录
 4. 启动游戏
 
@@ -115,24 +116,27 @@
 
 ## 构建
 
-需要 JDK 17+。
+需要 JDK 17（Forge 版）或 JDK 21（NeoForge 版），两个子工程分别构建：
 
 ```bash
-# Windows
-.\gradlew.bat reobfJar
+# Forge 1.20.1
+cd forge-1.20.1
+./gradlew build
 
-# Linux / macOS
-./gradlew reobfJar
+# NeoForge 1.21.1
+cd neoforge-1.21.1
+./gradlew build
 ```
 
-构建产物在 `build/libs/` 目录。
+构建产物在各自的 `build/libs/` 目录。
 
 ---
 
 ## 项目结构
 
+`forge-1.20.1/src/main/java/com/sellbox/mod/`（`neoforge-1.21.1/` 结构相同）：
+
 ```
-src/main/java/com/sellbox/mod/
 ├── api/                 # 经济 API 接口
 ├── block/               # 出货箱方块 & 方块实体
 ├── client/              # 客户端 HUD 叠加层
@@ -152,7 +156,9 @@ src/main/java/com/sellbox/mod/
 ├── SellBoxMod.java      # 模组主入口
 └── SellBoxModClient.java # 客户端初始化
 
-src/main/resources/
+`forge-1.20.1/src/main/resources/`：
+
+```
 ├── META-INF/mods.toml   # 模组元数据
 ├── assets/sellbox/      # 材质/模型/语言/音效
 └── data/sellbox/        # 配方/战利品表
@@ -163,26 +169,12 @@ src/main/resources/
 
 ## 仓库结构
 
-本仓库同时存放两个平台的实现，两份代码各自独立，需分别构建：
+本仓库同时存放两个平台的实现，两份代码各自独立，需在各自目录构建：
 
 | 目录 | 平台 | Java |
 | --- | --- | --- |
 | `forge-1.20.1/` | Minecraft 1.20.1 / Forge | 17 |
 | `neoforge-1.21.1/` | Minecraft 1.21.1 / NeoForge | 21 |
-
-## 构建
-
-```bash
-# Forge 1.20.1
-cd forge-1.20.1
-./gradlew build
-
-# NeoForge 1.21.1
-cd neoforge-1.21.1
-./gradlew build
-```
-
-产物输出到各自的 `build/libs/` 目录。
 
 ## 两端差异要点
 

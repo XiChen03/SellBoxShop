@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "D D",
+    "DBD",
+    "D D"
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:diamond"
+    },
+    "B": {
+      "item": "sellbox:coin_bag"
+    }
+  },
+  "result": {
+    "id": "sellbox:market",
+    "count": 1
+  }
+}

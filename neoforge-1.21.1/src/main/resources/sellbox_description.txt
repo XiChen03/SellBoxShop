@@ -1,0 +1,16 @@
+A feature-rich economy and shop mod for Minecraft that adds comprehensive trading systems, player-owned shops, and flexible currency management.
+
+Features:
+- Built-in economy system with balance tracking, leaderboards, and persistent data
+- Flexible item pricing system with hotbar quick-sell and config-based pricing
+- Player shop system: create your own shops, browse the market, and manage inventory
+- Stock management for tracking goods and market pricing
+- Optional integration with VSS (ViScriptShop) currency and Curios API
+- English pinyin search support for easier item lookup
+- Fully configurable auto-seller timing (in game ticks)
+- Admin commands for economy management, pricing, and shop control
+- Clean UI with trade confirmation, category management, and command-based shop actions
+- Server-side persistence: balances, pending payouts, pricing, and shop data all save automatically
+
+Requires: NeoForge 1.21.1
+Optional: ViScriptShop, Curios API

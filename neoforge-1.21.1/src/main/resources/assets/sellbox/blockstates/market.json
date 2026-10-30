@@ -1,0 +1,8 @@
+﻿{
+  "variants": {
+    "facing=north": { "model": "sellbox:block/market" },
+    "facing=south": { "model": "sellbox:block/market", "y": 180 },
+    "facing=east": { "model": "sellbox:block/market", "y": 90 },
+    "facing=west": { "model": "sellbox:block/market", "y": 270 }
+  }
+}

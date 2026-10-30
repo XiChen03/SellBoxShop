@@ -1,0 +1,12 @@
+﻿{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "sellbox:block/shangxia",
+    "up": "sellbox:block/shangxia",
+    "down": "sellbox:block/shangxia",
+    "north": "sellbox:block/1zheng",
+    "south": "sellbox:block/qianhou",
+    "east": "sellbox:block/you",
+    "west": "sellbox:block/zuo"
+  }
+}

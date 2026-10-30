@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CCC",
+    "C C",
+    "CCC"
+  ],
+  "key": {
+    "C": {
+      "item": "minecraft:leather"
+    }
+  },
+  "result": {
+    "id": "sellbox:coin_bag",
+    "count": 1
+  }
+}

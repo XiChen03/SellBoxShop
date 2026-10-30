@@ -160,6 +160,45 @@ src/main/resources/
 
 ---
 
+
+## 仓库结构
+
+本仓库同时存放两个平台的实现，两份代码各自独立，需分别构建：
+
+| 目录 | 平台 | Java |
+| --- | --- | --- |
+| `forge-1.20.1/` | Minecraft 1.20.1 / Forge | 17 |
+| `neoforge-1.21.1/` | Minecraft 1.21.1 / NeoForge | 21 |
+
+## 构建
+
+```bash
+# Forge 1.20.1
+cd forge-1.20.1
+./gradlew build
+
+# NeoForge 1.21.1
+cd neoforge-1.21.1
+./gradlew build
+```
+
+产物输出到各自的 `build/libs/` 目录。
+
+## 两端差异要点
+
+| 项目 | Forge 1.20.1 | NeoForge 1.21.1 |
+| --- | --- | --- |
+| Java | 17 | 21 |
+| 网络包 | `ModNetwork.CHANNEL` | `ModPayloads` |
+| NBT | `getTag()/setTag()` | DataComponents |
+| 鼠标滚轮 | `mouseScrolled(x, y, d)` | `mouseScrolled(x, y, dxy)` |
+| 配置存储 | 存档级 `{world}/config/SellBox/` | 同左 |
+| TAB 集成 | `TabIntegration`（反射） | `TabIntegration`（反射） |
+
+## 源码索引
+
+逐类职责说明、关键流程与待办见 [`docs/PROJECT_INDEX.md`](docs/PROJECT_INDEX.md)。
+
 ## 许可证
 
 本项目为闭源项目，保留所有权利。详见 [LICENSE.txt](LICENSE.txt)。

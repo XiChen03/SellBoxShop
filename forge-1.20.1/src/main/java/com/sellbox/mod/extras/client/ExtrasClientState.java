@@ -145,7 +145,9 @@ public final class ExtrasClientState {
                     if (m.has("items")) {
                         for (var it : m.getAsJsonArray("items")) {
                             JsonObject io = it.getAsJsonObject();
-                            v.itemNames.add(io.has("name") ? io.get("name").getAsString() : "?");
+                            String iid = io.has("id") ? io.get("id").getAsString() : "";
+                            v.itemNames.add(!iid.isEmpty() ? itemName(iid)
+                                    : (io.has("name") ? io.get("name").getAsString() : "?"));
                             itemTotal += io.has("count") ? Math.max(0, io.get("count").getAsInt()) : 1;
                         }
                     }
@@ -178,8 +180,8 @@ public final class ExtrasClientState {
                     ExchangeView v = new ExchangeView();
                     v.itemId = x.has("id") ? x.get("id").getAsString() : "";
                     v.name = x.has("name") ? x.get("name").getAsString() : "";
-                    // 服务端名字可能包含自定义名/NBT 名，只有缺失时才用注册表名兜底
-                    if (v.name.isEmpty() && !v.itemId.isEmpty()) v.name = itemName(v.itemId);
+                    // 服务端语言固定是 en_us，名字必须由客户端按 id 本地化
+                    if (!v.itemId.isEmpty()) v.name = itemName(v.itemId);
                     v.value = x.has("value") ? x.get("value").getAsLong() : 0L;
                     v.owned = x.has("owned") ? x.get("owned").getAsInt() : 0;
                     if (!v.itemId.isEmpty()) exchange.add(v);
@@ -253,7 +255,7 @@ public final class ExtrasClientState {
                             CrateItemView w = new CrateItemView();
                             w.id = io.has("id") ? io.get("id").getAsString() : "";
                             w.name = io.has("name") ? io.get("name").getAsString() : "";
-                            if (w.name.isEmpty() && !w.id.isEmpty()) w.name = itemName(w.id);
+                            if (!w.id.isEmpty()) w.name = itemName(w.id);
                             w.count = io.has("count") ? io.get("count").getAsInt() : 1;
                             w.chance = io.has("chance") ? io.get("chance").getAsDouble() : 0;
                             w.rarity = io.has("rarity") ? io.get("rarity").getAsString() : "common";
@@ -358,7 +360,7 @@ public final class ExtrasClientState {
                         ReelView v = new ReelView();
                         v.id = ro.has("id") ? ro.get("id").getAsString() : "";
                         v.name = ro.has("name") ? ro.get("name").getAsString() : "";
-                        if (v.name.isEmpty() && !v.id.isEmpty()) v.name = itemName(v.id);
+                        if (!v.id.isEmpty()) v.name = itemName(v.id);
                         v.rarity = ro.has("rarity") ? ro.get("rarity").getAsString() : "common";
                         r.reel.add(v);
                     }
@@ -366,7 +368,7 @@ public final class ExtrasClientState {
                         JsonObject w = o.getAsJsonObject("won");
                         r.wonName = w.has("name") ? w.get("name").getAsString() : "";
                         r.wonId = w.has("id") ? w.get("id").getAsString() : "";
-                        if (r.wonName.isEmpty() && !r.wonId.isEmpty()) r.wonName = itemName(r.wonId);
+                        if (!r.wonId.isEmpty()) r.wonName = itemName(r.wonId);
                         r.wonCount = w.has("count") ? w.get("count").getAsInt() : 1;
                         r.wonRarity = w.has("rarity") ? w.get("rarity").getAsString() : "common";
                     }
@@ -382,7 +384,7 @@ public final class ExtrasClientState {
                         ReelView v = new ReelView();
                         v.name = ro.has("name") ? ro.get("name").getAsString() : "";
                         v.id = ro.has("id") ? ro.get("id").getAsString() : "";
-                        if (v.name.isEmpty() && !v.id.isEmpty()) v.name = itemName(v.id);
+                        if (!v.id.isEmpty()) v.name = itemName(v.id);
                         v.count = ro.has("count") ? ro.get("count").getAsInt() : 1;
                         v.rarity = ro.has("rarity") ? ro.get("rarity").getAsString() : "common";
                         b.wons.add(v);

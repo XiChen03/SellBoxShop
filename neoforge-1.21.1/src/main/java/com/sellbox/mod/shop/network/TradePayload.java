@@ -171,6 +171,10 @@ public record TradePayload(
             int xpPerBottle;
             try { xpPerBottle = Integer.parseInt(entry.extraData()); } catch (NumberFormatException e) { return; }
             player.giveExperiencePoints(xpPerBottle * quantity);
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "buy", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    quantity * entry.quantity(), totalPrice);
+            com.sellbox.mod.extras.ExtrasNotices.buy(player, "extras.notice.buy.title", new Object[0],
+                    "extras.notice.buy.text", new Object[]{quantity * entry.quantity(), totalPrice});
             settle(player, category, entry, quantity);
             ModPayloads.sendCloseScreen(player, "message.sellbox.buy_success");
             return;
@@ -226,6 +230,10 @@ public record TradePayload(
                 player.getInventory().placeItemBackInInventory(offerTemplate.copyWithCount(excessOffer));
             }
             
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "barter", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    actualUnits * goodsQtyPerUnit, 0L);
+            com.sellbox.mod.extras.ExtrasNotices.buy(player, "extras.notice.barter.title", new Object[0],
+                    "extras.notice.barter.text", new Object[]{actualUnits * goodsQtyPerUnit});
             settle(player, category, entry, actualUnits);
             ModPayloads.sendCloseScreen(player, "message.sellbox.barter_success");
             return;
@@ -251,6 +259,10 @@ public record TradePayload(
                 totalItems -= chunk;
             }
             
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "buy", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    quantity * entry.quantity(), totalPrice);
+            com.sellbox.mod.extras.ExtrasNotices.buy(player, "extras.notice.buy.title", new Object[0],
+                    "extras.notice.buy.text", new Object[]{quantity * entry.quantity(), totalPrice});
             settle(player, category, entry, quantity);
             ModPayloads.sendCloseScreen(player, "message.sellbox.buy_success");
         } else if (entry.tradeType() == ShopEntry.TradeType.SELL) {
@@ -285,6 +297,10 @@ public record TradePayload(
                 ModPayloads.sendBalanceToPlayer(player);
             }
             
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "sale", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    actualQty * qtyPerUnit, earned);
+            com.sellbox.mod.extras.ExtrasNotices.sale(player, "extras.notice.sale.title", new Object[0],
+                    "extras.notice.sale.text", new Object[]{actualQty * qtyPerUnit, earned});
             settle(player, category, entry, actualQty);
             ModPayloads.sendCloseScreen(player, "message.sellbox.sell_success");
         }

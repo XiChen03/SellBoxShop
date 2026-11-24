@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.Minecraft;
@@ -23,6 +25,8 @@ import net.minecraft.network.chat.Component;
  * <p>默认为「无限」；选中无限时输入框只绘制不接受输入。
  */
 public class SetItemLimitScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
 
     /** 限量模式 */
     public enum LimitMode {
@@ -43,7 +47,7 @@ public class SetItemLimitScreen extends Screen {
     }
 
     private static final int DESIGN_W = 260;
-    private static final int DESIGN_H = 190;
+    private static final int DESIGN_H = 206;
 
     private final ShopScreen parentScreen;
     private final String categoryName;
@@ -83,9 +87,9 @@ public class SetItemLimitScreen extends Screen {
         int boxW = (int) Math.round(90 * sf);
         int boxH = (int) Math.round(16 * sf);
         int boxX = cx - boxW / 2;
-        int boxY = top + (int) (52 * sf);
+        int boxY = top + (int) (66 * sf);
 
-        limitBox = new EditBox(font, boxX, boxY, boxW, boxH, Component.literal("0"));
+        limitBox = new EditBox(font, GuiDraw.innerTextX(boxX), GuiDraw.innerTextY(boxY, boxH), GuiDraw.innerWidth(boxW), boxH, Component.literal("0"));
         limitBox.setBordered(false);
         limitBox.setFilter(s -> s.matches("\\d*"));
         if (initialLimit > 0) limitBox.setValue(String.valueOf(initialLimit));
@@ -98,7 +102,7 @@ public class SetItemLimitScreen extends Screen {
         int modeGap = (int) Math.round(10 * sf);
         int modeGroupW = modeBtnW * 3 + modeGap * 2;
         int modeStartX = cx - modeGroupW / 2;
-        int modeY = top + (int) (92 * sf);
+        int modeY = top + (int) (108 * sf);
         LimitMode[] modes = LimitMode.values();
         for (int i = 0; i < modes.length; i++) {
             final LimitMode m = modes[i];
@@ -112,7 +116,7 @@ public class SetItemLimitScreen extends Screen {
         int btnGap = (int) Math.round(20 * sf);
         int groupW = btnW * 2 + btnGap;
         int btnStartX = cx - groupW / 2;
-        int btnY = top + (int) (136 * sf);
+        int btnY = top + (int) (152 * sf);
         addRenderableWidget(new ShopButton(btnStartX, btnY, btnW, btnH,
                 Component.literal("取消"), b -> minecraft.setScreen(parentScreen)));
         addRenderableWidget(new ShopButton(btnStartX + btnW + btnGap, btnY, btnW, btnH,
@@ -157,12 +161,13 @@ public class SetItemLimitScreen extends Screen {
         parentScreen.refreshFromConfig();
     }
 
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, width, height, 0xC0000000);
+    public void renderBackground(GuiGraphics g) {
+        // 背景在 render 开头自绘，这里阻止原版再盖一层
     }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        g.fill(0, 0, this.width, this.height, T.scrim);
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
         int cx = width / 2;
@@ -170,22 +175,22 @@ public class SetItemLimitScreen extends Screen {
         int top = height / 2 - popupH / 2;
         float s = (float) ShopUI.getScale(height);
 
-        fillRoundedRect(g, left, top, popupW, popupH, 0xFF333333);
-        g.fill(left + 2, top, left + popupW - 2, top + 1, 0xFFFFAA00);
+        fillRoundedRect(g, left, top, popupW, popupH, T.popupBg);
+        g.fill(left + 2, top, left + popupW - 2, top + 1, T.accentStripe);
 
         // 标题
-        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, top + (int) (12 * s), popupW - 20, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, top + (int) (12 * s), popupW - 20, T.textTitle);
         // 副标题
-        FontUtil.drawAutoFitCentered(g, font, "不限次数则可无限交易", cx, top + (int) (30 * s), popupW - 20, 0xAAAAAA);
+        FontUtil.drawAutoFitCentered(g, font, "不限次数则可无限交易", cx, top + (int) (32 * s), popupW - 20, T.textMuted);
         // 输入框标签
-        FontUtil.drawAutoFitCentered(g, font, "次数:", cx, top + (int) (38 * s), popupW - 20, 0xFFFFFF);
+        FontUtil.drawAutoFitCentered(g, font, "次数:", cx, top + (int) (52 * s), popupW - 20, T.textPrimary);
 
         super.render(g, mx, my, pt);
 
         int boxW = (int) Math.round(90 * s);
         int boxH = (int) Math.round(16 * s);
         int boxX = cx - boxW / 2;
-        int boxY = top + (int) (52 * s);
+        int boxY = top + (int) (66 * s);
         boolean editable = mode != LimitMode.UNLIMITED;
         drawBox(g, boxX, boxY, boxW, boxH, editable && limitBox.isFocused(), editable);
 
@@ -201,7 +206,7 @@ public class SetItemLimitScreen extends Screen {
         if (idx < 0 || idx >= modeButtons.length) return;
         AbstractWidget b = modeButtons[idx];
         if (b == null) return;
-        int col = 0xFFFFAA;
+        int col = T.textTitle;
         int pad = 2;
         g.fill(b.getX() - pad, b.getY() - pad, b.getX() + b.getWidth() + pad, b.getY() - pad + 1, col);
         g.fill(b.getX() - pad, b.getY() + b.getHeight(), b.getX() + b.getWidth() + pad, b.getY() + b.getHeight() + pad, col);
@@ -210,11 +215,8 @@ public class SetItemLimitScreen extends Screen {
     }
 
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused, boolean editable) {
-        int col = !editable ? 0x55FFFFFF : (focused ? 0xFFFFFFFF : 0x55AAAAAA);
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        int col = !editable ? T.inputBorderFocused : (focused ? T.textPrimary : T.inputBorderUnfocused);
+        GuiDraw.inputBox(g, x, y, w, h, focused, col);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

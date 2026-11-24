@@ -1,5 +1,6 @@
 package com.sellbox.mod.integration.jei;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.registry.ModItems;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
@@ -69,28 +70,28 @@ public class ShopTradeCategory extends AbstractRecipeCategory<ShopTradeRecipe> {
                 ItemIcons.render(guiGraphics, coin, 4, 16);
                 guiGraphics.renderItemDecorations(font, coin, 4, 16);
                 int qty = recipe.outputs().get(0).getCount();
-                guiGraphics.drawString(font, "\u6240\u9700\uFF1A\u00A5" + price, 4, leftLabelY, 0xFFAA0000, false);
-                guiGraphics.drawString(font, "\u6240\u5F97\uFF1Ax" + qty, 70, rightLabelY, 0xFF008800, false);
+                guiGraphics.drawString(font, "\u6240\u9700\uFF1A\u00A5" + price, 4, leftLabelY, 0xFFAA0000,GuiDraw.shadow());
+                guiGraphics.drawString(font, "\u6240\u5F97\uFF1Ax" + qty, 70, rightLabelY, 0xFF008800,GuiDraw.shadow());
             } else if (hasInput && !hasOutput) {
                 ItemIcons.render(guiGraphics, coin, 70, 16);
                 guiGraphics.renderItemDecorations(font, coin, 70, 16);
                 int qty = recipe.inputs().get(0).getCount();
-                guiGraphics.drawString(font, "\u6240\u9700\uFF1Ax" + qty, 4, leftLabelY, 0xFFAA0000, false);
-                guiGraphics.drawString(font, "\u6240\u5F97\uFF1A\u00A5" + price, 70, rightLabelY, 0xFF008800, false);
+                guiGraphics.drawString(font, "\u6240\u9700\uFF1Ax" + qty, 4, leftLabelY, 0xFFAA0000,GuiDraw.shadow());
+                guiGraphics.drawString(font, "\u6240\u5F97\uFF1A\u00A5" + price, 70, rightLabelY, 0xFF008800,GuiDraw.shadow());
             }
         } else if (hasInput && hasOutput) {
             int inputQty = recipe.inputs().get(0).getCount();
             int outputQty = recipe.outputs().get(0).getCount();
-            guiGraphics.drawString(font, "\u6240\u9700\uFF1Ax" + inputQty, 4, leftLabelY, 0xFFAA0000, false);
-            guiGraphics.drawString(font, "\u6240\u5F97\uFF1Ax" + outputQty, 70, rightLabelY, 0xFF008800, false);
+            guiGraphics.drawString(font, "\u6240\u9700\uFF1Ax" + inputQty, 4, leftLabelY, 0xFFAA0000,GuiDraw.shadow());
+            guiGraphics.drawString(font, "\u6240\u5F97\uFF1Ax" + outputQty, 70, rightLabelY, 0xFF008800,GuiDraw.shadow());
         } else if (hasOutput && !hasInput) {
             int qty = recipe.outputs().get(0).getCount();
-            guiGraphics.drawString(font, "\u6240\u9700\uFF1A0", 4, leftLabelY, 0xFFAA0000, false);
-            guiGraphics.drawString(font, "\u6240\u5F97\uFF1Ax" + qty, 70, rightLabelY, 0xFF008800, false);
+            guiGraphics.drawString(font, "\u6240\u9700\uFF1A0", 4, leftLabelY, 0xFFAA0000,GuiDraw.shadow());
+            guiGraphics.drawString(font, "\u6240\u5F97\uFF1Ax" + qty, 70, rightLabelY, 0xFF008800,GuiDraw.shadow());
         } else if (hasInput && !hasOutput) {
             int qty = recipe.inputs().get(0).getCount();
-            guiGraphics.drawString(font, "\u6240\u9700\uFF1Ax" + qty, 4, leftLabelY, 0xFFAA0000, false);
-            guiGraphics.drawString(font, "\u6240\u5F97\uFF1A0", 70, rightLabelY, 0xFF008800, false);
+            guiGraphics.drawString(font, "\u6240\u9700\uFF1Ax" + qty, 4, leftLabelY, 0xFFAA0000,GuiDraw.shadow());
+            guiGraphics.drawString(font, "\u6240\u5F97\uFF1A0", 70, rightLabelY, 0xFF008800,GuiDraw.shadow());
         }
 
         arrow.draw(guiGraphics, 46, 16);
@@ -100,7 +101,7 @@ public class ShopTradeCategory extends AbstractRecipeCategory<ShopTradeRecipe> {
             var text = Component.literal(tradeType);
             int textWidth = font.width(text);
             int x = (getWidth() - textWidth) / 2;
-            guiGraphics.drawString(font, text, x, 4, 0xFF404040, false);
+            guiGraphics.drawString(font, text, x, 4, 0xFF404040,GuiDraw.shadow());
         }
 
         String extraInfo = recipe.extraInfo();
@@ -108,7 +109,7 @@ public class ShopTradeCategory extends AbstractRecipeCategory<ShopTradeRecipe> {
             var text = Component.literal(extraInfo);
             int textWidth = font.width(text);
             int x = (getWidth() - textWidth) / 2;
-            guiGraphics.drawString(font, text, x, 48, 0xFF606060, false);
+            guiGraphics.drawString(font, text, x, 48, 0xFF606060,GuiDraw.shadow());
         }
 
         String categoryName = recipe.categoryName();
@@ -116,7 +117,7 @@ public class ShopTradeCategory extends AbstractRecipeCategory<ShopTradeRecipe> {
             var text = Component.literal("\u4F4D\u7F6E\uFF1A" + categoryName);
             int textWidth = font.width(text);
             int x = (getWidth() - textWidth) / 2;
-            guiGraphics.drawString(font, text, x, 60, 0xFF808080, false);
+            guiGraphics.drawString(font, text, x, 60, 0xFF808080,GuiDraw.shadow());
         }
     }
 }

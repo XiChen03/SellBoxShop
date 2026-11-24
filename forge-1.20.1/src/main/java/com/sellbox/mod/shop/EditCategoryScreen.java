@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.Minecraft;
@@ -8,13 +10,29 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+/**
+ * 编辑分类弹窗。
+ * <p>
+ * 按钮布局：
+ * <pre>
+ *      上移   下移
+ *      删除此分类
+ *   取消        保存
+ * </pre>
+ * 配色全部取自 {@link GuiTheme}，跟随主题切换。
+ */
 public class EditCategoryScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
+
     private int popupW = 240;
     private int popupH = 200;
 
     private final ShopScreen parentScreen;
     private final String categoryName;
     private EditBox nameBox;
+    private int nameBoxX, nameBoxY, nameBoxW, nameBoxH;
+    private int popupTop, popupLeft, row3Bottom;
 
     public EditCategoryScreen(ShopScreen parent, String categoryName) {
         super(Component.literal("编辑分类 - " + categoryName));
@@ -26,30 +44,78 @@ public class EditCategoryScreen extends Screen {
     protected void init() {
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
+
         double scale = ShopUI.getScale(height);
-        popupW = (int) Math.round(240 * scale);
-        popupH = (int) Math.round(200 * scale);
+        int btnH = (int) Math.round(16 * scale);
+        int gap = (int) Math.round(6 * scale);
+        int pad = (int) Math.round(14 * scale);
+
+        popupW = Math.max(230, (int) Math.round(250 * scale));
+        // 内容：标题(26) + 名称行 + 上移/下移 + 删除 + 取消/保存 + 底部信息(24)
+        popupH = (int) Math.round(26 * scale) + (btnH * 3) + (gap * 2) + (int) Math.round(40 * scale);
+        popupH = Math.max(popupH, 150);
+
         int cx = this.width / 2;
         int cy = this.height / 2;
         int left = cx - popupW / 2;
         int top = cy - popupH / 2;
 
-        this.nameBox = new EditBox(this.font, cx - 47, top + 44, 94, 11,
+        nameBoxW = popupW - pad * 2 - (int) Math.round(34 * scale);
+        nameBoxH = (int) Math.round(12 * scale);
+        nameBoxX = left + pad + (int) Math.round(34 * scale);
+        nameBoxY = top + (int) Math.round(32 * scale);
+
+        this.nameBox = new EditBox(this.font, GuiDraw.innerTextX(nameBoxX), GuiDraw.innerTextY(nameBoxY, nameBoxH), GuiDraw.innerWidth(nameBoxW), nameBoxH - 2,
                 Component.literal("分类名称"));
         this.nameBox.setValue(categoryName);
         this.nameBox.setBordered(false);
         this.addRenderableWidget(this.nameBox);
 
-        int btnH = 14;
-        int gap = 6;
+        int pairGap = (int) Math.round(6 * scale);
+        int halfW = (popupW - pad * 2 - pairGap) / 2;
 
-        int btn1w = 54;
-        int btn2w = 34;
-        int btn3w = 34;
-        int row1Total = btn1w + gap + btn2w + gap + btn3w;
-        int row1StartX = cx - row1Total / 2;
+        // ── 第 1 行：上移 | 下移 ──────────────────────────
+        int row1Y = nameBoxY + nameBoxH + (int) Math.round(8 * scale);
+        addRenderableWidget(new ShopButton(cx - halfW - pairGap / 2, row1Y, halfW, btnH,
+                Component.literal("上移"),
+                btn -> {
+                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
+                    ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
+                            "move_category_up", categoryName, "", "", 0, -1, false, "", 1, "", "", 1));
+                    parentScreen.refreshFromConfig();
+                }));
+        addRenderableWidget(new ShopButton(cx + pairGap / 2, row1Y, halfW, btnH,
+                Component.literal("下移"),
+                btn -> {
+                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
+                    ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
+                            "move_category_down", categoryName, "", "", 0, -1, false, "", 1, "", "", 1));
+                    parentScreen.refreshFromConfig();
+                }));
 
-        addRenderableWidget(new ShopButton(row1StartX, top + 62, btn1w, btnH, Component.literal("保存名称"),
+        // ── 第 2 行：删除此分类（整行宽） ──────────────────
+        int row2Y = row1Y + btnH + gap;
+        int fullW = popupW - pad * 2;
+        addRenderableWidget(new ShopButton(cx - fullW / 2, row2Y, fullW, btnH,
+                Component.literal("删除此分类"),
+                btn -> {
+                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
+                    ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
+                            "remove_category", categoryName, "", "", 0, -1, false, "", 1, "", "", 1));
+                    this.minecraft.setScreen(parentScreen);
+                    parentScreen.refreshFromConfig();
+                }));
+
+        // ── 第 3 行：取消 | 保存 ──────────────────────────
+        int row3Y = row2Y + btnH + gap;
+        addRenderableWidget(new ShopButton(cx - halfW - pairGap / 2, row3Y, halfW, btnH,
+                Component.translatable("gui.shop.cancel"),
+                btn -> {
+                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
+                    this.minecraft.setScreen(parentScreen);
+                }));
+        addRenderableWidget(new ShopButton(cx + pairGap / 2, row3Y, halfW, btnH,
+                Component.literal("保存"),
                 btn -> {
                     String newName = nameBox.getValue().trim();
                     if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
@@ -61,76 +127,43 @@ public class EditCategoryScreen extends Screen {
                     this.minecraft.setScreen(parentScreen);
                 }));
 
-        addRenderableWidget(new ShopButton(row1StartX + btn1w + gap, top + 62, btn2w, btnH, Component.literal("上移"),
-                btn -> {
-                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
-                    ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
-                            "move_category_up", categoryName, "", "", 0, -1, false, "", 1, "", "", 1));
-                    parentScreen.refreshFromConfig();
-                }));
-
-        addRenderableWidget(new ShopButton(row1StartX + btn1w + gap + btn2w + gap, top + 62, btn3w, btnH, Component.literal("下移"),
-                btn -> {
-                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
-                    ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
-                            "move_category_down", categoryName, "", "", 0, -1, false, "", 1, "", "", 1));
-                    parentScreen.refreshFromConfig();
-                }));
-
-        int btn4w = 107;
-        addRenderableWidget(new ShopButton(cx - btn4w / 2, top + 80, btn4w, btnH, Component.literal("删除此分类"),
-                btn -> {
-                    if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
-                    ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
-                            "remove_category", categoryName, "", "", 0, -1, false, "", 1, "", "", 1));
-                    this.minecraft.setScreen(parentScreen);
-                    parentScreen.refreshFromConfig();
-                }));
-
-        int btn5w = 67;
-        addRenderableWidget(new ShopButton(cx - btn5w / 2, top + 98, btn5w, btnH,
-                Component.translatable("gui.shop.cancel"),
-                btn -> { if (this.minecraft == null) this.minecraft = Minecraft.getInstance(); this.minecraft.setScreen(parentScreen); }));
+        // 保存布局供 render 复用
+        this.popupTop = top;
+        this.popupLeft = left;
+        this.row3Bottom = row3Y + btnH;
     }
 
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0xC0000000);
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics) {
+        // 由 render 里的主题遮罩负责，这里不画原版模糊背景
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
-        int cx = this.width / 2;
-        int cy = this.height / 2;
-        int left = cx - popupW / 2;
-        int top = cy - popupH / 2;
 
-        fillRoundedRect(guiGraphics, left, top, popupW, popupH, 0xFF333333);
-        guiGraphics.fill(left + 2, top, left + popupW - 2, top + 1, 0xFFFFAA00);
+        int cx = this.width / 2;
+
+        GuiDraw.scrim(guiGraphics, width, height);
+        GuiDraw.panelWithStripe(guiGraphics, popupLeft, popupTop, popupW, popupH);
+        GuiDraw.inputBox(guiGraphics, nameBoxX, nameBoxY, nameBoxW, nameBoxH, nameBox.isFocused());
+
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        FontUtil.drawAutoFitCentered(guiGraphics, this.font, "编辑分类", cx, top + 8, popupW - 10, 0xFFFFAA);
+        GuiDraw.title(guiGraphics, this.font, "编辑分类", cx, popupTop + 8, popupW - 10);
 
-        drawBox(guiGraphics, cx - 47, top + 44, 94, 11, nameBox.isFocused());
-        FontUtil.drawAutoFitCentered(guiGraphics, this.font, "名称:", cx, top + 34, 100, 0xFFFFFF);
+        double scale = ShopUI.getScale(height);
+        int pad = (int) Math.round(14 * scale);
+        GuiDraw.label(guiGraphics, this.font, "名称:", popupLeft + pad, nameBoxY + 3,
+                (int) Math.round(34 * scale));
+        if (nameBox.getValue().isEmpty() && !nameBox.isFocused()) {
+            GuiDraw.hint(guiGraphics, this.font, "分类名称", GuiDraw.innerTextX(nameBoxX), GuiDraw.innerTextY(nameBoxY, nameBoxH), nameBoxW - 8);
+        }
 
         int count = ShopConfig.getCategory(categoryName) != null ? ShopConfig.getCategory(categoryName).size() : 0;
-        Component info = Component.literal("商品数: " + count);
-        FontUtil.drawAutoFitCentered(guiGraphics, this.font, info.getString(), cx, top + popupH - 25, popupW - 20, 0x888888);
-    }
-
-    private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
-    }
-
-    private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x + 2, y, x + w - 2, y + h, color);
-        g.fill(x, y + 2, x + w, y + h - 2, color);
+        GuiDraw.note(guiGraphics, this.font, "商品数: " + count, cx,
+                Math.min(popupTop + popupH - 18, row3Bottom + 8), popupW - 20);
     }
 
     @Override

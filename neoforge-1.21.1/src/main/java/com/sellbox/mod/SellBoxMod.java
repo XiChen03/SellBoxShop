@@ -68,7 +68,7 @@ public class SellBoxMod {
     private void onCommonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             CuriosIntegration.registerMoneyCurio();
-            com.sellbox.mod.gui.GuiTheme.load();
+            com.sellbox.mod.gui.GuiTheme.init(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get());
             LOGGER.info("SellBox mod common setup complete");
         });
     }
@@ -120,6 +120,11 @@ public class SellBoxMod {
 PlayerShopConfig.initPerWorld(worldDir);
             SellBoxEconomy.initPerWorld(worldDir);
             TradeLimitTracker.initPerWorld(worldDir);
+        // 扩展模块（签到/邮箱/兑换/兑换码/好友）：同样按存档保存
+        com.sellbox.mod.extras.ExtrasConfigFile.initPerWorld(worldDir);
+        com.sellbox.mod.extras.ExtrasManager.initPerWorld(worldDir);
+        // 记住注册表访问，供物品组件序列化（附魔/自定义名）使用
+        com.sellbox.mod.extras.ExtrasManager.setRegistryAccess(event.getServer().registryAccess());
         SellBoxEconomyAPI.set(new IEconomy() {
             @Override public int getBalance(ServerPlayer player) { return SellBoxEconomy.getBalance(player); }
             @Override public boolean hasBalance(ServerPlayer player, int amount) { return SellBoxEconomy.hasBalance(player, amount); }
@@ -133,10 +138,34 @@ PlayerShopConfig.initPerWorld(worldDir);
 
     private void onServerStarted(ServerStartedEvent event) {
         TabIntegration.onServerStarted(event.getServer());
+        // 扩展数据每 10 秒最多落盘一次
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post e) ->
+                com.sellbox.mod.extras.ExtrasManager.tickSave(e.getServer()));
+        // 打印 VSS 探测结果（新版/旧版 API 走不同签名，出问题时能一眼看出）
+        if (com.sellbox.mod.integration.VSSIntegration.isLoaded()) {
+            LOGGER.info("VSS: loaded, API = {}, currency switch = {}",
+                    com.sellbox.mod.integration.VSSIntegration.getApiVersion(),
+                    SellBoxConfig.isVssCurrencyEnabled() ? "on" : "off");
+        }
+        // 混合端上 Vault 的 Economy 提供者可能比本模组晚注册，服务端启动完成后再探一次
+        if (com.sellbox.mod.integration.VaultIntegration.probe()) {
+            boolean ready = com.sellbox.mod.integration.VaultIntegration.isEconomyReady();
+            LOGGER.info("Vault: loaded={}, economy ready={}, provider={}",
+                    true, ready, com.sellbox.mod.integration.VaultIntegration.getProviderName());
+            if (SellBoxConfig.isVaultCurrencyEnabled() && !ready) {
+                LOGGER.warn("Vault 经济已开启，但没找到 Economy 提供者（服务端可能没装经济插件），暂时回落到内置经济");
+            }
+        } else if (SellBoxConfig.isVaultCurrencyEnabled()) {
+            LOGGER.warn("Vault 经济已开启，但当前服务端没有 Bukkit/Vault（纯 Forge/NeoForge 端不支持），回落到内置经济");
+        }
     }
 
     private void onServerStopped(ServerStoppedEvent event) {
         TabIntegration.onServerStopped();
+        // 停服时强制落盘扩展数据
+        com.sellbox.mod.extras.ExtrasManager.save();
+        com.sellbox.mod.extras.ExtrasConfigFile.save();
+        com.sellbox.mod.extras.ExtrasServer.clearRuntimeState();
         SellBoxBlockEntity.clearLoadedRegistry();
         SellBoxConfig.flushSavePending();
         SellBoxConfig.flushSavePricing();

@@ -15,6 +15,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class PricingPayload {
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final ResourceLocation SET_PRICES_ID = ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "set_prices");
     public static final ResourceLocation OPEN_PRICING_ID = ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "open_pricing");
 
@@ -35,7 +40,7 @@ public class PricingPayload {
                 (buf, payload) -> {
                     buf.writeVarInt(payload.prices.size());
                     for (Map.Entry<String, Integer> entry : payload.prices.entrySet()) {
-                        buf.writeUtf(entry.getKey());
+                        buf.writeUtf(safe(entry.getKey()));
                         buf.writeVarInt(entry.getValue());
                     }
                 },
@@ -104,7 +109,7 @@ public class PricingPayload {
         public static final StreamCodec<FriendlyByteBuf, DeleteNbtPricesPayload> CODEC = StreamCodec.of(
                 (buf, payload) -> {
                     buf.writeVarInt(payload.keys().size());
-                    for (String k : payload.keys()) buf.writeUtf(k);
+                    for (String k : payload.keys()) buf.writeUtf(safe(k));
                 },
                 buf -> {
                     int size = buf.readVarInt();
@@ -144,7 +149,7 @@ public class PricingPayload {
                 (buf, payload) -> {
                     buf.writeVarInt(payload.prices().size());
                     for (Map.Entry<String, Integer> e : payload.prices().entrySet()) {
-                        buf.writeUtf(e.getKey());
+                        buf.writeUtf(safe(e.getKey()));
                         buf.writeVarInt(e.getValue());
                     }
                 },

@@ -19,12 +19,17 @@ public record PlayerShopDataPayload(
 ) implements CustomPacketPayload {
     public static final Type<PlayerShopDataPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "player_shop_data"));
 
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final StreamCodec<FriendlyByteBuf, PlayerShopDataPayload> CODEC = StreamCodec.of(
             (buf, payload) -> {
                 buf.writeVarInt(payload.shopNames.size());
                 for (var entry : payload.shopNames.entrySet()) {
                     buf.writeUUID(entry.getKey());
-                    buf.writeUtf(entry.getValue());
+                    buf.writeUtf(safe(entry.getValue()));
                 }
 
                 buf.writeVarInt(payload.shopItems.size());
@@ -33,30 +38,30 @@ public record PlayerShopDataPayload(
                     List<ShopEntry> items = entry.getValue();
                     buf.writeVarInt(items.size());
                     for (ShopEntry item : items) {
-                        buf.writeUtf(item.itemId().toString());
-                        buf.writeUtf(item.tradeType().name());
+                        buf.writeUtf(safe(item.itemId().toString()));
+                        buf.writeUtf(safe(item.tradeType().name()));
                         buf.writeVarInt(item.price());
-                        buf.writeUtf(item.entryType());
-                        buf.writeUtf(item.extraData());
+                        buf.writeUtf(safe(item.entryType()));
+                        buf.writeUtf(safe(item.extraData()));
                         buf.writeBoolean(item.requireOp());
                         buf.writeVarInt(item.quantity());
-                        buf.writeUtf(item.customName());
+                        buf.writeUtf(safe(item.customName()));
                         if (item.barterItemId() != null) {
                             buf.writeBoolean(true);
-                            buf.writeUtf(item.barterItemId().toString());
+                            buf.writeUtf(safe(item.barterItemId().toString()));
                         } else {
                             buf.writeBoolean(false);
                         }
                         buf.writeVarInt(item.barterItemQty());
                         buf.writeBoolean(item.strictMatch());
-                        buf.writeUtf(item.nbt() != null ? item.nbt() : "");
+                        buf.writeUtf(safe(item.nbt() != null ? item.nbt() : ""));
                         buf.writeBoolean(item.barterOfferStrict());
-                        buf.writeUtf(item.barterOfferNbt() != null ? item.barterOfferNbt() : "");
+                        buf.writeUtf(safe(item.barterOfferNbt() != null ? item.barterOfferNbt() : ""));
                         buf.writeBoolean(item.barterGoodsStrict());
                         if (item.requiredQuestId() != null) {
                             buf.writeBoolean(true);
                             buf.writeLong(item.requiredQuestId());
-                            buf.writeUtf(item.requiredQuestName() != null ? item.requiredQuestName() : "");
+                            buf.writeUtf(safe(item.requiredQuestName() != null ? item.requiredQuestName() : ""));
                         } else {
                             buf.writeBoolean(false);
                         }
@@ -69,7 +74,7 @@ public record PlayerShopDataPayload(
                     Map<String, Integer> stocks = entry.getValue();
                     buf.writeVarInt(stocks.size());
                     for (var stock : stocks.entrySet()) {
-                        buf.writeUtf(stock.getKey());
+                        buf.writeUtf(safe(stock.getKey()));
                         buf.writeVarInt(stock.getValue());
                     }
                 }
@@ -82,7 +87,7 @@ public record PlayerShopDataPayload(
                 buf.writeVarInt(payload.ownerNames.size());
                 for (var entry : payload.ownerNames.entrySet()) {
                     buf.writeUUID(entry.getKey());
-                    buf.writeUtf(entry.getValue());
+                    buf.writeUtf(safe(entry.getValue()));
                 }
             },
             buf -> {

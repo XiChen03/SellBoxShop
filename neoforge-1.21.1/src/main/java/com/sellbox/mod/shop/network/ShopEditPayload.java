@@ -32,6 +32,11 @@ public record ShopEditPayload(
         @Nullable String barterOfferNbt,
         boolean barterGoodsStrict
 ) implements CustomPacketPayload {
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final Type<ShopEditPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "shop_edit"));
 
     public ShopEditPayload(String action, String category, String extraData, String tradeType, int price, int index,
@@ -88,22 +93,22 @@ public record ShopEditPayload(
 
         @Override
         public void encode(FriendlyByteBuf buf, ShopEditPayload value) {
-            buf.writeUtf(value.action);
-            buf.writeUtf(value.category);
-            buf.writeUtf(value.extraData);
-            buf.writeUtf(value.tradeType);
+            buf.writeUtf(safe(value.action));
+            buf.writeUtf(safe(value.category));
+            buf.writeUtf(safe(value.extraData));
+            buf.writeUtf(safe(value.tradeType));
             buf.writeVarInt(value.price);
             buf.writeVarInt(value.index);
             buf.writeBoolean(value.requireOp);
-            buf.writeUtf(value.icon);
+            buf.writeUtf(safe(value.icon));
             buf.writeVarInt(value.quantity);
-            buf.writeUtf(value.customName);
-            buf.writeUtf(value.barterItemId != null ? value.barterItemId : "");
+            buf.writeUtf(safe(value.customName));
+            buf.writeUtf(safe(value.barterItemId != null ? value.barterItemId : ""));
             buf.writeVarInt(value.barterItemQty);
             buf.writeBoolean(value.strictMatch);
-            buf.writeUtf(value.nbt != null ? value.nbt : "");
+            buf.writeUtf(safe(value.nbt != null ? value.nbt : ""));
             buf.writeBoolean(value.barterOfferStrict);
-            buf.writeUtf(value.barterOfferNbt != null ? value.barterOfferNbt : "");
+            buf.writeUtf(safe(value.barterOfferNbt != null ? value.barterOfferNbt : ""));
             buf.writeBoolean(value.barterGoodsStrict);
         }
     };

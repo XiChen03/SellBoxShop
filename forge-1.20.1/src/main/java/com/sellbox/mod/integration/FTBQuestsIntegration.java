@@ -44,6 +44,13 @@ public class FTBQuestsIntegration {
     private static Method getIDStaticMethod;      // 可选
     private static Method getRawTitleMethod;
     private static Method getTitleMethod;
+    private static Method getAltTitleMethod;   // 仅章节兜底用
+    // ── 1.21.1 标题存在 TranslationManager 里，需要按语言逐个探测 ──
+    private static Method getQuestFileMethod2;         // QuestObjectBase#getQuestFile()
+    private static Method getTranslationManagerMethod; // BaseQuestFile#getTranslationManager()
+    private static Method getStringTranslationMethod;  // TranslationManager#getStringTranslation
+    private static java.lang.reflect.Field translationMapField;  // TranslationManager#map
+    private static Object titleTranslationKey;         // TranslationKey.TITLE
     private static Method componentGetStringMethod;
 
     private static Method teamDataGetMethod;      // 可选
@@ -101,6 +108,7 @@ public class FTBQuestsIntegration {
             }
             getRawTitleMethod = findMethod(questObjectBaseClass, "getRawTitle");
             getTitleMethod = findMethod(questObjectBaseClass, "getTitle");
+            getAltTitleMethod = findMethod(questObjectBaseClass, "getAltTitle");
             componentGetStringMethod = net.minecraft.network.chat.Component.class.getMethod("getString");
 
             // 完成状态：拿不到就按「未做限制」处理，不能因为反射失败把商品藏起来
@@ -120,6 +128,30 @@ public class FTBQuestsIntegration {
 
             if (getAllChaptersMethod == null && getChapterGroupsMethod == null) {
                 throw new NoSuchMethodException("no chapter listing method on " + questFileClass.getName());
+            }
+
+            // ── 标题翻译表：1.21.1 的标题在 ftbquests/lang/*.snbt 里 ──
+            try {
+                getQuestFileMethod2 = findMethod(questObjectBaseClass, "getQuestFile");
+                Class<?> baseQuestFileClass = Class.forName("dev.ftb.mods.ftbquests.quest.BaseQuestFile");
+                getTranslationManagerMethod = findMethod(baseQuestFileClass, "getTranslationManager");
+                Class<?> tmClass = Class.forName("dev.ftb.mods.ftbquests.quest.translation.TranslationManager");
+                translationMapField = tmClass.getDeclaredField("map");
+                translationMapField.setAccessible(true);
+                Class<?> keyClass = Class.forName("dev.ftb.mods.ftbquests.quest.translation.TranslationKey");
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                Object tk = Enum.valueOf((Class<? extends Enum>) keyClass.asSubclass(Enum.class), "TITLE");
+                titleTranslationKey = tk;
+                getStringTranslationMethod = tmClass.getMethod("getStringTranslation",
+                        questObjectBaseClass, String.class, keyClass);
+                SellBoxMod.LOGGER.info("FTB Quests: translation-table title probe enabled");
+            } catch (Throwable t) {
+                getQuestFileMethod2 = null;
+                getTranslationManagerMethod = null;
+                translationMapField = null;
+                titleTranslationKey = null;
+                getStringTranslationMethod = null;
+                SellBoxMod.LOGGER.debug("FTB Quests: translation-table probe unavailable ({})", t.toString());
             }
 
             classFound = true;
@@ -196,24 +228,148 @@ public class FTBQuestsIntegration {
         return chapters;
     }
 
+    /**
+     * 取显示名。
+     * <p>1.21.1 起 FTB Quests 把标题挪进了 {@code TranslationManager}（{@code ftbquests/lang/*.snbt}），
+     * 而 {@code getRawTitle()} 只查「文件 locale」和「fallback locale（通常 en_us）」两张表。
+     * 中文整合包的标题往往只在 {@code zh_cn.snbt} 里，于是两边都查不到、返回空串，
+     * 再被 {@code getTitle()} 兜成图标物品名（就是界面上那些 "Oak Log"）。
+     * <p>所以这里既扫翻译表，也优先采用对象自身的标题。
+     * <p>取名字的优先级（任务、章节、分组一致）：
+     * <ol>
+     *   <li>{@code getRawTitle()} —— 对象自身的原始标题</li>
+     *   <li>{@code getTitle()} —— 对象自身的标题组件；客户端的可翻译标题会在这里被解析出来</li>
+     *   <li>翻译表全语言扫描 —— 解决服务端 locale 与整合包语言不一致</li>
+     *   <li>（仅章节）{@code getAltTitle()} —— 文件名 / 章节序号这类有意义的兜底</li>
+     * </ol>
+     * 任务的 {@code getAltTitle()} 是图标物品名（会显示成 "Oak Log" 这种），所以任务不使用它，
+     * 由调用方退回「任务 N」这种中性标签。
+     */
     @Nullable
     private static String title(Object obj) {
-        try {
-            if (getRawTitleMethod != null) {
-                Object raw = getRawTitleMethod.invoke(obj);
-                if (raw instanceof String s && !isPlaceholder(s)) return s;
-            }
-        } catch (Throwable ignored) {
+        String raw = invokeString(getRawTitleMethod, obj);
+        if (valid(raw)) return raw;
+
+        // 任务自身的标题组件。注意服务端的 getTitle() 在原始标题为空时会直接返回 getAltTitle()，
+        // 而任务的 altTitle 是<b>图标物品名</b>（所以会出现 "Oak Log" 这种假名字）。
+        // 判定方法：getTitle() 与 getAltTitle() 相同 => 是 altTitle 兜底，不是真标题，丢弃。
+        String self = invokeComponent(getTitleMethod, obj);
+        String alt = invokeComponent(getAltTitleMethod, obj);
+        boolean altIsFake = valid(alt) && alt.equals(self);
+        if (valid(self) && !altIsFake) return self;
+
+        // 再从翻译表里找真标题（任务/章节/分组都适用）
+        String fromLang = titleFromTranslationTables(obj);
+        if (valid(fromLang)) return fromLang;
+
+        // 章节的 altTitle 是有意义的兜底（文件名 / 章节序号），任务的 altTitle 是图标物品名，不能用
+        if (obj.getClass().getName().endsWith(".Chapter") && valid(alt)) return alt;
+
+        if (!titleWarned) {
+            titleWarned = true;
+            SellBoxMod.LOGGER.warn(
+                    "FTB Quests: no readable title for {} (raw='{}', title='{}', lang='{}'); "
+                            + "names fall back to generic labels",
+                    obj.getClass().getSimpleName(), raw, self, fromLang);
+        }
+        return null;
+    }
+
+    private static boolean titleWarned = false;
+
+    /**
+     * 直接扫 TranslationManager 里所有语言的表，取第一个非空标题。
+     * 这样就不受「服务端 locale 与整合包语言不一致」的影响。
+     */
+    @Nullable
+    private static String titleFromTranslationTables(Object obj) {
+        if (getQuestFileMethod2 == null || getTranslationManagerMethod == null
+                || getStringTranslationMethod == null || titleTranslationKey == null) {
+            return null;
         }
         try {
-            Object comp = getTitleMethod.invoke(obj);
-            if (comp != null) {
-                Object str = componentGetStringMethod.invoke(comp);
-                if (str instanceof String s && !isPlaceholder(s)) return s;
+            Object file = getQuestFileMethod2.invoke(obj);
+            if (file == null) return null;
+            Object tm = getTranslationManagerMethod.invoke(file);
+            if (tm == null) return null;
+
+            java.util.List<String> locales = new java.util.ArrayList<>();
+            // 优先当前 locale、中文、en_us，其余按表里出现的顺序
+            try {
+                Object cur = file.getClass().getMethod("getLocale").invoke(file);
+                if (cur instanceof String s && !s.isEmpty()) locales.add(s);
+            } catch (Throwable ignored) {
+            }
+            locales.add("zh_cn");
+            locales.add("en_us");
+            if (translationMapField != null) {
+                try {
+                    if (translationMapField.get(tm) instanceof java.util.Map<?, ?> map) {
+                        for (Object k : map.keySet()) {
+                            if (k instanceof String s && !locales.contains(s)) locales.add(s);
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+
+            // 注意：getStringTranslation 是 TranslationManager 的实例方法，
+            // receiver 必须是 tm，而不是任务对象；旧代码误把 obj 当 receiver，异常被吞掉后
+            // 所有标题都退回任务 ID，这就是 1.21.1 显示 id 的根本原因。
+            for (String locale : locales) {
+                try {
+                    Object res = getStringTranslationMethod.invoke(tm, obj, locale, titleTranslationKey);
+                    if (res instanceof java.util.Optional<?> opt && opt.isPresent()
+                            && opt.get() instanceof String s && valid(s)) {
+                        return s;
+                    }
+                } catch (Throwable ignored) {
+                }
             }
         } catch (Throwable ignored) {
         }
         return null;
+    }
+
+    @Nullable
+    private static String invokeString(@Nullable Method m, Object target) {
+        if (m == null) return null;
+        try {
+            Object v = m.invoke(target);
+            return v instanceof String s ? s.trim() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static String invokeComponent(@Nullable Method m, Object target) {
+        if (m == null) return null;
+        try {
+            Object comp = m.invoke(target);
+            if (comp == null) return null;
+            Object s = componentGetStringMethod.invoke(comp);
+            return s instanceof String str ? str.trim() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean valid(@Nullable String s) {
+        return s != null && !s.isEmpty() && !isPlaceholder(s) && !looksLikeTranslationKey(s);
+    }
+
+    /** 未解析的翻译键：无空格且含点，例如 {@code ftbquests.chapter} */
+    private static boolean looksLikeTranslationKey(String s) {
+        if (s.indexOf(' ') >= 0 || s.indexOf('\u00a7') >= 0) return false;
+        if (s.indexOf('.') < 0) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-';
+            if (!ok) return false;
+        }
+        return true;
     }
 
     private static boolean isPlaceholder(String s) {
@@ -237,13 +393,16 @@ public class FTBQuestsIntegration {
             serverQuestNameCache.clear();
             List<QuestInfo> result = new ArrayList<>();
 
+            int chapterIndex = 0;
             for (Object chapter : collectChapters(file)) {
                 if (chapter == null) continue;
                 long chapterId = idOf(chapter);
                 String chapterName = title(chapter);
                 if (chapterName == null) {
-                    chapterName = "章 #" + Long.toHexString(chapterId).toUpperCase(Locale.ROOT);
+                    // 读不到标题时用序号，比一串十六进制 ID 可读得多
+                    chapterName = "第 " + (chapterIndex + 1) + " 章";
                 }
+                chapterIndex++;
 
                 String groupName = "";
                 if (chapterGetGroupMethod != null) {

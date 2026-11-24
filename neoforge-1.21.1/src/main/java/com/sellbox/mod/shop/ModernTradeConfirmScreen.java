@@ -1,5 +1,6 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.shop.network.TradePayload;
 import com.sellbox.mod.util.ItemIcons;
@@ -43,7 +44,7 @@ public class ModernTradeConfirmScreen extends Screen {
         int boxW = (int)(80 * scale);
         int boxH = (int)(16 * scale);
 
-        quantityBox = new EditBox(font, left + (int)(60 * scale), top + (int)(56 * scale), boxW, boxH, Component.literal("1"));
+        quantityBox = new EditBox(font, GuiDraw.innerTextX(left + (int)(60 * scale)), GuiDraw.innerTextY(top + (int)(56 * scale), boxH), GuiDraw.innerWidth(boxW), boxH, Component.literal("1"));
         quantityBox.setBordered(false);
         quantityBox.setValue("1");
         quantityBox.setResponder(s -> {
@@ -95,6 +96,11 @@ public class ModernTradeConfirmScreen extends Screen {
             }
             this.minecraft.setScreen(parentScreen);
         } catch (NumberFormatException ignored) {}
+    }
+
+    /** 背景由本界面自己绘制，阻止原版在 super.render 时再盖一层渐变背景 */
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -153,11 +159,11 @@ public class ModernTradeConfirmScreen extends Screen {
 
     private void drawCenteredText(GuiGraphics g, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
         int w = font.width(text);
-        g.drawString(font, text, x - w / 2, y, color, true);
+        g.drawString(font, text, x - w / 2, y, color,GuiDraw.shadow());
     }
 
     private void drawText(GuiGraphics g, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
-        g.drawString(font, text, x, y, color, true);
+        g.drawString(font, text, x, y, color,GuiDraw.shadow());
     }
 
     @Override

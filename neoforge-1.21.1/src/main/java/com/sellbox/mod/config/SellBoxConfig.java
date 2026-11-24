@@ -43,8 +43,10 @@ public class SellBoxConfig {
     // 配置值（从 sellbox-common.properties 读取）
     private static int sellTime = 5;
     private static boolean useVssCurrency = false;
+    private static boolean useVaultCurrency = false;
     private static boolean globalPrices = true;
     private static boolean globalShopConfig = true;
+    private static boolean extrasEnabled = true;
 
     // 配置文件路径
     private static Path commonConfigPath;
@@ -52,12 +54,16 @@ public class SellBoxConfig {
     public static int getSellTime() { return sellTime; }
     public static void setSellTime(int value) { sellTime = value; saveCommonConfig(); }
     public static boolean isVssCurrencyEnabled() { return useVssCurrency; }
+    public static boolean isVaultCurrencyEnabled() { return useVaultCurrency; }
     public static boolean isGlobalPrices() { return globalPrices; }
     public static boolean isGlobalShopConfig() { return globalShopConfig; }
+    public static boolean isExtrasEnabled() { return extrasEnabled; }
 
     public static void setVssCurrencyEnabled(boolean value) { useVssCurrency = value; saveCommonConfig(); }
+    public static void setVaultCurrencyEnabled(boolean value) { useVaultCurrency = value; saveCommonConfig(); }
     public static void setGlobalPrices(boolean value) { globalPrices = value; saveCommonConfig(); }
     public static void setGlobalShopConfig(boolean value) { globalShopConfig = value; saveCommonConfig(); }
+    public static void setExtrasEnabled(boolean value) { extrasEnabled = value; saveCommonConfig(); }
 
     public static void init(Path configDirPath) {
         configDir = configDirPath;
@@ -92,15 +98,21 @@ public class SellBoxConfig {
             return;
         }
         Properties props = new Properties();
+        boolean needSave = false;
         try (InputStream is = Files.newInputStream(commonConfigPath)) {
             props.load(is);
             sellTime = Integer.parseInt(props.getProperty("sellTime", "5"));
             useVssCurrency = Boolean.parseBoolean(props.getProperty("useVssCurrency", "false"));
+            useVaultCurrency = Boolean.parseBoolean(props.getProperty("useVaultCurrency", "false"));
             globalPrices = Boolean.parseBoolean(props.getProperty("globalPrices", "true"));
             globalShopConfig = Boolean.parseBoolean(props.getProperty("globalShopConfig", "true"));
+            extrasEnabled = Boolean.parseBoolean(props.getProperty("extrasEnabled", "true"));
+            // 老配置文件没有这一行时补写，确保管理员能在文件里看到总开关
+            needSave = !props.containsKey("extrasEnabled");
         } catch (Exception e) {
             SellBoxMod.LOGGER.error("Failed to load sellbox-common.properties", e);
         }
+        if (needSave) saveCommonConfig();
     }
 
     // 保存配置到 sellbox-common.properties
@@ -127,6 +139,15 @@ public class SellBoxConfig {
                 writer.write("useVssCurrency=" + useVssCurrency);
                 writer.newLine();
                 writer.newLine();
+                writer.write("# 是否使用 Vault 经济（仅混合端 Arclight/Mohist 等有效）");
+                writer.newLine();
+                writer.write("# 默认 false。开启后余额读写走 Bukkit 的 Vault Economy 提供者");
+                writer.newLine();
+                writer.write("# 注意：Vault 是 double，SellBox 是 int，小数会被四舍五入");
+                writer.newLine();
+                writer.write("useVaultCurrency=" + useVaultCurrency);
+                writer.newLine();
+                writer.newLine();
                 writer.write("# 物品收购价是否全局共享");
                 writer.newLine();
                 writer.write("# 默认 true，所有存档共享同一份收购价");
@@ -141,6 +162,13 @@ public class SellBoxConfig {
                 writer.write("# 设为 false 则按存档分别保存");
                 writer.newLine();
                 writer.write("globalShopConfig=" + globalShopConfig);
+                writer.newLine();
+                writer.newLine();
+                writer.write("# 扩展功能总开关（默认 true）");
+                writer.newLine();
+                writer.write("# 关闭后签到/邮箱/兑换/开箱/好友等全部不可用");
+                writer.newLine();
+                writer.write("extrasEnabled=" + extrasEnabled);
                 writer.newLine();
             }
         } catch (IOException e) {

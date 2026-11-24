@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.shop.network.TradePayload;
 import com.sellbox.mod.util.FontUtil;
 import com.sellbox.mod.util.ItemIcons;
@@ -12,6 +14,8 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class TradeConfirmScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private int popupW = 220;
     private int popupH = 220;
 
@@ -50,7 +54,7 @@ public class TradeConfirmScreen extends Screen {
         int btnH = (int) Math.round(20 * sf);
         int btnShortH = (int) Math.round(16 * sf);
 
-        this.quantityBox = new EditBox(font, left + (int)(60 * sf), top + (int)(56 * sf), boxW, boxH, Component.translatable("gui.shop.quantity"));
+        this.quantityBox = new EditBox(font, GuiDraw.innerTextX(left + (int)(60 * sf)), GuiDraw.innerTextY(top + (int)(56 * sf), boxH), GuiDraw.innerWidth(boxW), boxH, Component.translatable("gui.shop.quantity"));
         this.quantityBox.setBordered(false);
         this.quantityBox.setValue("1");
         this.quantityBox.setResponder(s -> {
@@ -114,7 +118,6 @@ public class TradeConfirmScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        var T = com.sellbox.mod.gui.GuiTheme.get();
         int cx = width / 2;
         int cy = (height - 48) / 2;
         int left = cx - popupW / 2;
@@ -155,17 +158,20 @@ public class TradeConfirmScreen extends Screen {
                     (minecraft.level != null
                             ? entry.createBarterOfferStack(minecraft.level.registryAccess()) : entry.createBarterOfferStack())
                             .getHoverName().getString() + " x" + offerQ);
-            FontUtil.drawAutoFitText(g, font, barterPrice.getString(), left + (int)(15 * sf), top + (int)(38 * sf), popupW - (int)(20 * sf), 0x88FF88);
+            FontUtil.drawAutoFitText(g, font, barterPrice.getString(), left + (int)(15 * sf), top + (int)(38 * sf), popupW - (int)(20 * sf), T.textPrice);
         }
 
         // 物品图标：以物易物显示商品物，普通显示原物品
         var mc = Minecraft.getInstance();
         ItemStack itemStack = (mc.level != null) ? entry.createStack(mc.level.registryAccess()) : entry.createStack();
+        // 图标外框：先铺底色再描边。现代主题 cellBorder=0，只画框会看不见，
+        // 所以底色用 cellBg（现代主题的深色块），保证任何主题下都能看出"这是一个格子"。
+        int pad = Math.max(2, T.cornerRadius / 2);
+        if (T.cellBg != 0) {
+            fillRoundedRect(g, iconX - pad, iconY - pad, iconSize + pad * 2, iconSize + pad * 2, T.cellBg);
+        }
+        GuiDraw.iconFrame(g, iconX, iconY, iconSize);
         ItemIcons.render(g, itemStack, iconX, iconY);
-        g.fill(iconX, iconY, iconX + iconSize, iconY + 1, T.cellBorder);
-        g.fill(iconX, iconY + iconSize - 1, iconX + iconSize, iconY + iconSize, T.cellBorder);
-        g.fill(iconX, iconY, iconX + 1, iconY + iconSize, T.cellBorder);
-        g.fill(iconX + iconSize - 1, iconY, iconX + iconSize, iconY + iconSize, T.cellBorder);
 
         // 鼠标悬浮预览框：显示完整原版物品标签（含 NBT/附魔等），改名仅影响名字行、标签位置不变
         if (mx >= iconX && mx <= iconX + iconSize && my >= iconY && my <= iconY + iconSize) {
@@ -183,7 +189,7 @@ public class TradeConfirmScreen extends Screen {
 
         int boxW = (int) Math.round(80 * sf);
         int boxH = (int) Math.round(16 * sf);
-        drawBox(g, left + (int)(60 * sf), top + (int)(56 * sf), boxW, boxH, quantityBox.isFocused());
+        drawBox(g, left + (int)(60 * sf), GuiDraw.innerTextY(top + (int)(56 * sf), boxH), GuiDraw.innerWidth(boxW), boxH, quantityBox.isFocused());
 
         Component qtyLabel = Component.literal("数量:");
         FontUtil.drawAutoFitText(g, font, qtyLabel.getString(), left + (int)(15 * sf), top + (int)(58 * sf), (int)(40 * sf), T.textPrimary);
@@ -229,12 +235,7 @@ public class TradeConfirmScreen extends Screen {
     }
 
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        var T = com.sellbox.mod.gui.GuiTheme.get();
-        int col = focused ? T.inputBorderFocused : T.inputBorderUnfocused;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

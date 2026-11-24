@@ -1,5 +1,6 @@
 package com.sellbox.mod.client;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.SellBoxMod;
 import com.sellbox.mod.integration.CuriosIntegration;
 import com.sellbox.mod.network.ModPayloads;
@@ -46,6 +47,6 @@ public class BalanceOverlay {
         int y = padding;
 
         gui.blit(COIN_ICON, x, y, 0, 0, iconSize, iconSize, iconSize, iconSize);
-        gui.drawString(mc.font, text, x + iconSize + padding, y + (iconSize - 8) / 2 + 1, 0xFFFFFF, true);
+        gui.drawString(mc.font, text, x + iconSize + padding, y + (iconSize - 8) / 2 + 1, 0xFFFFFF,GuiDraw.shadow());
     }
 }

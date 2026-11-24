@@ -9,7 +9,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
+
 public class MarketScreen extends AbstractContainerScreen<MarketMenu> {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private static final ResourceLocation CONTAINER_BACKGROUND = new ResourceLocation("minecraft:textures/gui/container/generic_54.png");
     private static final int CONTAINER_ROWS = 6;
 
@@ -35,8 +40,8 @@ public class MarketScreen extends AbstractContainerScreen<MarketMenu> {
 
         int receiptX = x + 8 + 7 * 18;
         int receiptY = y + 18 + 5 * 18;
-        guiGraphics.fill(receiptX - 1, receiptY - 1, receiptX + 17, receiptY + 17, 0xFFBB00FF);
-        guiGraphics.fill(receiptX, receiptY, receiptX + 16, receiptY + 16, 0xFF2D2D2D);
+        guiGraphics.fill(receiptX - 1, receiptY - 1, receiptX + 17, receiptY + 17, T.slotReceiptBorder);
+        guiGraphics.fill(receiptX, receiptY, receiptX + 16, receiptY + 16, T.slotInnerFill);
         if (!this.menu.getSlot(52).hasItem()) {
             Component receiptLabel = Component.translatable("gui.sellbox.market_receipt_slot");
             int textW = font.width(receiptLabel);
@@ -44,14 +49,14 @@ public class MarketScreen extends AbstractContainerScreen<MarketMenu> {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(receiptX + 8 - textW * scale / 2, receiptY + 12, 0);
             guiGraphics.pose().scale(scale, scale, 1.0f);
-            guiGraphics.drawString(font, receiptLabel, 0, 0, 0xFFAAAAAA);
+            guiGraphics.drawString(font, receiptLabel, 0, 0, T.textMuted, GuiDraw.shadow());
             guiGraphics.pose().popPose();
         }
 
         int bagX = x + 8 + 8 * 18;
         int bagY = y + 18 + 5 * 18;
-        guiGraphics.fill(bagX - 1, bagY - 1, bagX + 17, bagY + 17, 0xFFFFD700);
-        guiGraphics.fill(bagX, bagY, bagX + 16, bagY + 16, 0xFF2D2D2D);
+        guiGraphics.fill(bagX - 1, bagY - 1, bagX + 17, bagY + 17, T.slotBagBorder);
+        guiGraphics.fill(bagX, bagY, bagX + 16, bagY + 16, T.slotInnerFill);
         if (!this.menu.getSlot(53).hasItem()) {
             Component bagLabel = Component.translatable("gui.sellbox.market_bag_slot");
             int textW = font.width(bagLabel);
@@ -59,7 +64,7 @@ public class MarketScreen extends AbstractContainerScreen<MarketMenu> {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(bagX + 8 - textW * scale / 2, bagY + 12, 0);
             guiGraphics.pose().scale(scale, scale, 1.0f);
-            guiGraphics.drawString(font, bagLabel, 0, 0, 0xFFAAAAAA);
+            guiGraphics.drawString(font, bagLabel, 0, 0, T.textMuted, GuiDraw.shadow());
             guiGraphics.pose().popPose();
         }
     }

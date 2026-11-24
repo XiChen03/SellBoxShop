@@ -13,6 +13,9 @@ public class SellBoxScreen extends AbstractContainerScreen<SellBoxMenu> {
     private static final ResourceLocation CONTAINER_BACKGROUND = ResourceLocation.withDefaultNamespace("textures/gui/container/generic_54.png");
     private static final int CONTAINER_ROWS = 6;
 
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
+
     public SellBoxScreen(SellBoxMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title);
         this.imageHeight = 114 + CONTAINER_ROWS * 18;
@@ -49,12 +52,12 @@ public class SellBoxScreen extends AbstractContainerScreen<SellBoxMenu> {
         int bagX = x + 8 + 8 * 18;
         int bagY = y + 18 + 5 * 18;
         guiGraphics.fill(bagX - 1, bagY - 1, bagX + 17, bagY + 17, 0xFFFFD700);
-        guiGraphics.fill(bagX, bagY, bagX + 16, bagY + 16, 0xFF2D2D2D);
+        guiGraphics.fill(bagX, bagY, bagX + 16, bagY + 16, T.slotInnerFill);
 
         int receiptX = x + 8 + 7 * 18;
         int receiptY = y + 18 + 5 * 18;
-        guiGraphics.fill(receiptX - 1, receiptY - 1, receiptX + 17, receiptY + 17, 0xFFBB00FF);
-        guiGraphics.fill(receiptX, receiptY, receiptX + 16, receiptY + 16, 0xFF2D2D2D);
+        guiGraphics.fill(receiptX - 1, receiptY - 1, receiptX + 17, receiptY + 17, T.slotReceiptBorder);
+        guiGraphics.fill(receiptX, receiptY, receiptX + 16, receiptY + 16, T.slotInnerFill);
     }
 
     @Override

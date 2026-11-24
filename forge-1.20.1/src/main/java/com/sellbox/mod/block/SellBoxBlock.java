@@ -53,6 +53,21 @@ public class SellBoxBlock extends BaseEntityBlock {
     }
 
     @Override
+    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
+        if (level.isClientSide) return true;
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof SellBoxBlockEntity sellBox) {
+            UUID owner = sellBox.getOwner();
+            if (owner != null && !owner.equals(player.getUUID()) && !(player.isCreative() && player.hasPermissions(2))) {
+                player.displayClientMessage(
+                        Component.translatable("message.sellbox.not_owner_break", sellBox.getOwnerName()), true);
+                return false;
+            }
+        }
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+    }
+
+    @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return SHAPE;
     }

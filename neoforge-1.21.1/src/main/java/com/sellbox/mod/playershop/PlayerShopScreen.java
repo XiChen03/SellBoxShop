@@ -1,5 +1,6 @@
 package com.sellbox.mod.playershop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.network.ModPayloads;
 import com.sellbox.mod.shop.ShopButton;
 import com.sellbox.mod.shop.ShopEntry;
@@ -373,21 +374,17 @@ public class PlayerShopScreen extends Screen {
         int sy = top + 11;
         int sw = imageWidth - leftPanelW - 24;
         int sh = 20;
-        int col = searchFocused ? T.inputBorderFocused : T.inputBorderUnfocused;
-        guiGraphics.fill(sx + 2, sy, sx + sw - 2, sy + 1, col);
-        guiGraphics.fill(sx + 2, sy + sh - 1, sx + sw - 2, sy + sh, col);
-        guiGraphics.fill(sx, sy + 2, sx + 1, sy + sh - 2, col);
-        guiGraphics.fill(sx + sw - 1, sy + 2, sx + sw, sy + sh - 2, col);
+        GuiDraw.inputBox(guiGraphics, sx, sy, sw, sh, searchFocused);
 
         if (searchText.isEmpty() && !searchFocused) {
-            FontUtil.drawAutoFitText(guiGraphics, font, Component.translatable("gui.sellbox.search_hint").getString(), sx + 4, sy + 4, sw - 8, 0x777777);
+            FontUtil.drawAutoFitText(guiGraphics, font, Component.translatable("gui.sellbox.search_hint").getString(), GuiDraw.innerTextX(sx), GuiDraw.innerTextY(sy, sh), sw - 8, T.textHint);
         } else if (!searchText.isEmpty()) {
-            FontUtil.drawAutoFitText(guiGraphics, font, searchText, sx + 4, sy + 4, sw - 8, 0xFFFFFF);
+            FontUtil.drawAutoFitText(guiGraphics, font, searchText, GuiDraw.innerTextX(sx), GuiDraw.innerTextY(sy, sh), sw - 8, T.textPrimary);
         }
 
         if (searchFocused) {
             int cursorX = sx + 4 + (searchText.isEmpty() ? 0 : font.width(searchText));
-            guiGraphics.fill(cursorX, sy + 3, cursorX + 1, sy + sh - 3, 0xFFFFFFFF);
+            guiGraphics.fill(cursorX, sy + 3, cursorX + 1, sy + sh - 3, T.textPrimary);
         }
     }
 
@@ -396,7 +393,7 @@ public class PlayerShopScreen extends Screen {
         if (myUuid != null && myUuid.equals(currentShopOwner)) {
             Component editLabel = Component.translatable("gui.sellbox.my_shop");
             int labW = this.font.width(editLabel);
-            guiGraphics.drawString(this.font, editLabel, left + imageWidth - labW - 6, top + imageHeight - 14, 0xFFFFAA00);
+            guiGraphics.drawString(this.font, editLabel, left + imageWidth - labW - 6, top + imageHeight - 14, T.accentStripe, GuiDraw.shadow());
         }
     }
 
@@ -407,7 +404,7 @@ public class PlayerShopScreen extends Screen {
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(left + (leftPanelW - titleW * titleScale) / 2, top + 13, 0);
         guiGraphics.pose().scale(titleScale, titleScale, 1.0f);
-        guiGraphics.drawString(this.font, title, 0, 0, T.catTitleText);
+        guiGraphics.drawString(this.font, title, 0, 0, T.catTitleText, GuiDraw.shadow());
         guiGraphics.pose().popPose();
 
         int catStartY = top + 40;
@@ -430,7 +427,7 @@ public class PlayerShopScreen extends Screen {
             UUID myUuid = minecraft.player != null ? minecraft.player.getUUID() : null;
             boolean selected = shopUuid.equals(currentShopOwner) && !isSearching;
 
-            int borderColor = 0xFF4488FF;
+            int borderColor = T.btnBorder;
             guiGraphics.fill(bgX + 2, bgY, bgX + bgW - 2, bgY + 1, borderColor);
             guiGraphics.fill(bgX + 2, bgY + bgH - 1, bgX + bgW - 2, bgY + bgH, borderColor);
             guiGraphics.fill(bgX, bgY + 2, bgX + 1, bgY + bgH - 2, borderColor);
@@ -492,13 +489,13 @@ public class PlayerShopScreen extends Screen {
 
         if (!isMyShop() && totalSlots == 0) {
             FontUtil.drawAutoFitText(guiGraphics, this.font, Component.translatable("gui.sellbox.select_shop_prompt").getString(),
-                    left + leftPanelW + 20, top + 50, imageWidth - leftPanelW - 40, 0x888888);
+                    left + leftPanelW + 20, top + 50, imageWidth - leftPanelW - 40, T.textMuted);
             return;
         }
 
         if (totalSlots == 0 && isMyShop()) {
             FontUtil.drawAutoFitText(guiGraphics, this.font, Component.translatable("gui.sellbox.add_item_prompt").getString(),
-                    left + leftPanelW + 20, top + 50, imageWidth - leftPanelW - 40, 0x888888);
+                    left + leftPanelW + 20, top + 50, imageWidth - leftPanelW - 40, T.textMuted);
             return;
         }
 
@@ -518,16 +515,19 @@ public class PlayerShopScreen extends Screen {
                 int by = y + gap;
                 int bw = gridSpacingX - gap * 2;
                 int bh = gridSpacingY - gap * 2;
-                guiGraphics.fill(bx, by, bx + bw, by + 1, T.cellBorder);
-                guiGraphics.fill(bx, by + bh - 1, bx + bw, by + bh, T.cellBorder);
-                guiGraphics.fill(bx, by, bx + 1, by + bh, T.cellBorder);
-                guiGraphics.fill(bx + bw - 1, by, bx + bw, by + bh, T.cellBorder);
+                // 走主题：现代主题是无描边的纯色块（cellBg），经典主题才画边框
+                if (T.cellBg != 0) {
+                    fillRoundedRect(guiGraphics, bx, by, bw, bh, T.cellBg);
+                }
+                if (T.drawCellBorder) {
+                    drawRoundedBorder(guiGraphics, bx, by, bw, bh, T.cellBorder);
+                }
 
                 boolean hovered = mouseX >= x && mouseX <= x + gridSpacingX &&
                                   mouseY >= y && mouseY <= y + gridSpacingY;
                 // 库存染色：有货绿、无货红（只在悬停时染色图标）
                 int stock = getStockForEntry(shopOwner(), entry);
-                int stainColor = stock > 0 ? 0x5044FF44 : 0x50FF4444;
+                int stainColor = stock > 0 ? T.stockInColor : T.stockOutColor;
                 if (hovered) {
                     guiGraphics.fill(bx + 1, by + 1, bx + bw - 1, by + bh - 1, stainColor);
                 }
@@ -545,7 +545,7 @@ public class PlayerShopScreen extends Screen {
                     guiGraphics.pose().translate(0, 0, 200);
                     guiGraphics.pose().translate(qtyX, qtyY, 0);
                     guiGraphics.pose().scale(0.6f, 0.6f, 1.0f);
-                    guiGraphics.drawString(this.font, qtyStr, 0, 0, 0xFFFFFF);
+                    guiGraphics.drawString(this.font, qtyStr, 0, 0, T.textPrimary, GuiDraw.shadow());
                     guiGraphics.pose().popPose();
                 }
 
@@ -564,7 +564,7 @@ public class PlayerShopScreen extends Screen {
                 int tradeY = y + 2;
                 guiGraphics.pose().translate(tradeX, tradeY, 0);
                 guiGraphics.pose().scale(tradeScale, tradeScale, 1.0f);
-                guiGraphics.drawString(this.font, tradeStr, 0, 0, 0xFFFFAA);
+                guiGraphics.drawString(this.font, tradeStr, 0, 0, T.textTitle, GuiDraw.shadow());
                 guiGraphics.pose().popPose();
 
                 String priceStr;
@@ -631,16 +631,18 @@ public class PlayerShopScreen extends Screen {
         int bh = gridSpacingY - gap * 2;
         boolean hovered = mouseX >= x && mouseX <= x + gridSpacingX &&
                           mouseY >= y && mouseY <= y + gridSpacingY;
-        int bgColor = hovered ? 0xAA44AA44 : 0x88333333;
-        guiGraphics.fill(bx, by, bx + bw, by + 1, 0x66444444);
-        guiGraphics.fill(bx, by + bh - 1, bx + bw, by + bh, 0x66444444);
-        guiGraphics.fill(bx, by, bx + 1, by + bh, 0x66444444);
-        guiGraphics.fill(bx + bw - 1, by, bx + bw, by + bh, 0x66444444);
-        guiGraphics.fill(bx + 1, by + 1, bx + bw - 1, by + bh - 1, bgColor);
+        int bgColor = hovered ? T.addSlotBgHovered : T.addSlotBgNormal;
+        if (T.cellBg != 0) {
+            fillRoundedRect(guiGraphics, bx, by, bw, bh, T.cellBg);
+        }
+        if (T.drawCellBorder) {
+            drawRoundedBorder(guiGraphics, bx, by, bw, bh, T.addSlotBorder);
+        }
+        fillRoundedRect(guiGraphics, bx + 1, by + 1, bw - 2, bh - 2, bgColor);
 
         Component plus = Component.literal("+");
         int pw = this.font.width(plus);
-        guiGraphics.drawString(this.font, plus, x + (gridSpacingX - pw) / 2, y + (gridSpacingY - 9) / 2, T.addSlotText);
+        guiGraphics.drawString(this.font, plus, x + (gridSpacingX - pw) / 2, y + (gridSpacingY - 9) / 2, T.addSlotText, GuiDraw.shadow());
     }
 
     private void renderItemTooltips(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
@@ -710,33 +712,32 @@ public class PlayerShopScreen extends Screen {
         int balW = leftPanelW - 8;
         int balH = 30;
 
-        int borderCol = 0x55FFD700;
-        guiGraphics.fill(balX + 2, balY, balX + balW - 2, balY + 1, borderCol);
-        guiGraphics.fill(balX + 2, balY + balH - 1, balX + balW - 2, balY + balH, borderCol);
-        guiGraphics.fill(balX, balY + 2, balX + 1, balY + balH - 2, borderCol);
-        guiGraphics.fill(balX + balW - 1, balY + 2, balX + balW, balY + balH - 2, borderCol);
+        // 同 ShopScreen：底色三档兜底 + 边框两档兜底，保证「余额」永远有框
+        int balBgCol = T.balanceBg != 0 ? T.balanceBg : (T.cellBg != 0 ? T.cellBg : T.listRowBg);
+        if (balBgCol != 0) fillRoundedRect(guiGraphics, balX, balY, balW, balH, balBgCol);
+        int borderCol = T.balanceBorder != 0 ? T.balanceBorder
+                : (T.panelDivider != 0 ? T.panelDivider : GuiDraw.frameColor());
+        if (borderCol != 0) {
+            drawRoundedBorder(guiGraphics, balX, balY, balW, balH, borderCol);
+        }
 
         Component label = Component.translatable("gui.shop.balance");
         int labelW = this.font.width(label);
-        guiGraphics.drawString(this.font, label, left + (leftPanelW - labelW) / 2, balY + 3, 0xFFD700);
+        guiGraphics.drawString(this.font, label, left + (leftPanelW - labelW) / 2, balY + 3, T.textTotal, GuiDraw.shadow());
 
         Component amount = Component.literal("¥" + String.format("%,d", bal));
-        FontUtil.drawAutoFitCentered(guiGraphics, this.font, amount.getString(), left + leftPanelW / 2, balY + 15, leftPanelW - 12, 0xFFFFFF);
+        FontUtil.drawAutoFitCentered(guiGraphics, this.font, amount.getString(), left + leftPanelW / 2, balY + 15, leftPanelW - 12, T.textPrimary);
     }
 
     private void renderShopNameArea(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
         if (isMyShop() && shopNameBox != null && nameBoxW > 0) {
             boolean focused = shopNameBox.isFocused();
-            int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-            guiGraphics.fill(nameBoxX + 2, nameBoxY, nameBoxX + nameBoxW - 2, nameBoxY + 1, col);
-            guiGraphics.fill(nameBoxX + 2, nameBoxY + nameBoxH - 1, nameBoxX + nameBoxW - 2, nameBoxY + nameBoxH, col);
-            guiGraphics.fill(nameBoxX, nameBoxY + 2, nameBoxX + 1, nameBoxY + nameBoxH - 2, col);
-            guiGraphics.fill(nameBoxX + nameBoxW - 1, nameBoxY + 2, nameBoxX + nameBoxW, nameBoxY + nameBoxH - 2, col);
+            GuiDraw.inputBox(guiGraphics, nameBoxX, nameBoxY, nameBoxW, nameBoxH, focused);
 
             if (shopNameBox.getValue().isEmpty() && !focused) {
                 FontUtil.drawAutoFitText(guiGraphics, font, Component.translatable("gui.sellbox.shop_name_placeholder").getString(),
                         nameBoxX + nameBoxInnerPad, nameBoxY + (nameBoxH - font.lineHeight) / 2,
-                        nameBoxW - nameBoxInnerPad * 2, 0x777777);
+                        nameBoxW - nameBoxInnerPad * 2, T.textHint);
             }
         }
     }
@@ -980,13 +981,51 @@ public class PlayerShopScreen extends Screen {
             if (hovered) {
                 gui.fill(menuX + 1, optY, menuX + menuW - 1, optY + optH, T.ctxMenuItemHover);
             }
-            FontUtil.drawAutoFitText(gui, font, options.get(i), menuX + 6, optY + 2, menuW - 12, 0xFFFFFF);
+            FontUtil.drawAutoFitText(gui, font, options.get(i), menuX + 6, optY + 2, menuW - 12, T.textPrimary);
         }
     }
 
+    /** 按主题 cornerRadius 画圆角矩形（现代主题大圆角，经典主题切角） */
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x + 2, y, x + w - 2, y + h, color);
-        g.fill(x, y + 2, x + w, y + h - 2, color);
+        if (color == 0 || w <= 0 || h <= 0) return;
+        int r = Math.max(0, Math.min(T.cornerRadius, Math.min(w, h) / 2));
+        if (r <= 2) {
+            g.fill(x + 2, y, x + w - 2, y + h, color);
+            g.fill(x, y + 2, x + w, y + h - 2, color);
+            return;
+        }
+        g.fill(x, y + r, x + w, y + h - r, color);
+        for (int i = 0; i < r; i++) {
+            int dy = r - i - 1;
+            int inset = r - (int) Math.round(Math.sqrt((double) (r * r - dy * dy)));
+            g.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - i - 1, x + w - inset, y + h - i, color);
+        }
+    }
+
+    /** 画 1px 圆角边框（形状与 fillRoundedRect 对应） */
+    private void drawRoundedBorder(GuiGraphics g, int x, int y, int w, int h, int color) {
+        if (color == 0 || w <= 0 || h <= 0) return;
+        int r = Math.max(0, Math.min(T.cornerRadius, Math.min(w, h) / 2));
+        if (r <= 2) {
+            g.fill(x + 2, y, x + w - 2, y + 1, color);
+            g.fill(x + 2, y + h - 1, x + w - 2, y + h, color);
+            g.fill(x, y + 2, x + 1, y + h - 2, color);
+            g.fill(x + w - 1, y + 2, x + w, y + h - 2, color);
+            return;
+        }
+        g.fill(x, y + r, x + 1, y + h - r, color);
+        g.fill(x + w - 1, y + r, x + w, y + h - r, color);
+        g.fill(x + r, y, x + w - r, y + 1, color);
+        g.fill(x + r, y + h - 1, x + w - r, y + h, color);
+        for (int i = 0; i < r; i++) {
+            int dy = r - i - 1;
+            int inset = r - (int) Math.round(Math.sqrt((double) (r * r - dy * dy)));
+            g.fill(x + inset, y + i, x + inset + 1, y + i + 1, color);
+            g.fill(x + w - inset - 1, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - i - 1, x + inset + 1, y + h - i, color);
+            g.fill(x + w - inset - 1, y + h - i - 1, x + w - inset, y + h - i, color);
+        }
     }
 
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {

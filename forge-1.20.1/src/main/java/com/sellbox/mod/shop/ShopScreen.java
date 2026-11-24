@@ -1,5 +1,6 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.integration.JEIIntegration;
 import com.sellbox.mod.integration.jei.JeiBridge;
 import com.sellbox.mod.network.ModNetwork;
@@ -20,6 +21,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public class ShopScreen extends Screen {
+    /** 主题对象身份恒定，切换主题时就地刷新，界面无需重开 */
+    private final com.sellbox.mod.gui.GuiTheme T = com.sellbox.mod.gui.GuiTheme.get();
     private int imageWidth = 420;
     private int imageHeight = 260;
     private int leftPanelW = 100;
@@ -38,11 +41,31 @@ public class ShopScreen extends Screen {
     private String searchText = "";
     private boolean searchFocused;
     private int scrollOffset = 0;
+
+    // ── 编辑模式：Del 删除 + Ctrl+Z 撤销 ──
+    /** 鼠标当前悬停的条目（用于 Del） */
+    private ShopEntry hoveredEntry = null;
+    /** 悬停条目所在分类（跨分类搜索时可能 != currentCategory） */
+    private String hoveredEntryCategory = null;
+    /** 最近一次删除的可撤销记录 */
+    private static final class DeletedItem {
+        final String category;
+        final int index;
+        final ShopEntry entry;
+        DeletedItem(String category, int index, ShopEntry entry) {
+            this.category = category; this.index = index; this.entry = entry;
+        }
+    }
+    private final java.util.Deque<DeletedItem> undoStack = new java.util.ArrayDeque<>();
+    private static final int UNDO_LIMIT = 20;
+
     private int categoryScrollOffset = 0;
     private boolean isDraggingCatScrollbar = false;
     private int catDragStartMouseY, catDragStartOffset;
     private static final int GRID_COLS = 8;
     private static final int GRID_ROWS = 4;
+    /** 左侧栏顶部标题条高度（现代主题用它承载 CATEGORIES 标题） */
+    private static final int HEADER_BAND_HEIGHT = 34;
     private int gridSpacingX = 44;
     private int gridSpacingY = 48;
     private int topOffset = 0;
@@ -71,20 +94,25 @@ public class ShopScreen extends Screen {
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
 
-        // 基础布局尺寸（8列 x 4行）
-        int baseGridW = GRID_COLS * (44 + 2);
-        int baseGridH = GRID_ROWS * 48;
-        int baseWidth = 100 + 14 + baseGridW + 12;
+        // 基础布局尺寸（8列 x 4行），基准值取当前主题，主题换了面板随之变化
+        int cellW = Math.max(24, T.baseGridSpacingX);
+        int cellH = Math.max(28, T.baseGridSpacingY);
+        int leftW = Math.max(60, T.baseLeftPanelWidth);
+        int catH = Math.max(8, T.baseCategoryHeight);
+
+        int baseGridW = GRID_COLS * (cellW + 2);
+        int baseGridH = GRID_ROWS * cellH;
+        int baseWidth = leftW + 14 + baseGridW + 12;
         int baseHeight = 38 + baseGridH + 14 + 24;
 
         // 自适应缩放：优先按屏幕高度缩放，若宽度不足则进一步缩小
         double scale = Math.min((double) height / (baseHeight + 48), (double) width / (baseWidth + 16));
         scale = Math.max(0.55, Math.min(2.5, scale));
 
-        leftPanelW = Math.max(60, (int) Math.round(100 * scale));
-        categoryHeight = Math.max(8, (int) Math.round(14 * scale));
-        gridSpacingX = Math.max(20, (int) Math.round(44 * scale)) + 2;
-        gridSpacingY = Math.max(24, (int) Math.round(48 * scale)) + 11;
+        leftPanelW = Math.max(60, (int) Math.round(leftW * scale));
+        categoryHeight = Math.max(8, (int) Math.round(catH * scale));
+        gridSpacingX = Math.max(20, (int) Math.round(cellW * scale)) + 2;
+        gridSpacingY = Math.max(24, (int) Math.round(cellH * scale)) + 11;
         imageWidth = Math.max(200, leftPanelW + 14 + GRID_COLS * gridSpacingX + 12);
         imageHeight = Math.max(160, 38 + GRID_ROWS * gridSpacingY + 14);
 
@@ -99,6 +127,15 @@ public class ShopScreen extends Screen {
             for (String cat : categories) {
                 ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopOpenPacket(cat));
             }
+        }
+    }
+
+    /** 搜索前把所有分类的数据都拉一遍（只补缺失的，避免刷屏） */
+    private void ensureAllCategoriesCached() {
+        if (categories == null || categories.isEmpty()) return;
+        for (String cat : categories) {
+            if (categoryCache.containsKey(cat)) continue;
+            ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopOpenPacket(cat));
         }
     }
 
@@ -136,17 +173,27 @@ public class ShopScreen extends Screen {
         ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopOpenPacket(currentCategory));
     }
 
+    /** 背景已经在 render 里自绘，阻止原版在 super.render 时再盖一层渐变/泥土背景 */
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics) {
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
         int left = (this.width - imageWidth) / 2;
         int top = topOffset;
-
-        guiGraphics.fill(0, 0, this.width, this.height, 0x00000000);
-        fillRoundedRect(guiGraphics, left, top, imageWidth, imageHeight, 0xFF333333);
-        fillRoundedRect(guiGraphics, left, top, leftPanelW, imageHeight, 0xFF3A3A3A);
-        guiGraphics.fill(left + leftPanelW, top + 2, left + leftPanelW + 1, top + imageHeight - 2, 0xFF555555);
+        guiGraphics.fill(0, 0, this.width, this.height, T.screenBackground);
+        fillRoundedRect(guiGraphics, left, top, imageWidth, imageHeight, T.mainPanelBg);
+        fillRoundedRect(guiGraphics, left, top, leftPanelW, imageHeight, T.leftPanelBg);
+        if (T.panelBorder != 0) {
+            drawPanelBorder(guiGraphics, left, top, imageWidth, imageHeight, T.panelBorder);
+        }
+        if (T.headerBandBg != 0) {
+            fillRoundedRect(guiGraphics, left, top, imageWidth, HEADER_BAND_HEIGHT, T.headerBandBg);
+        }
+        guiGraphics.fill(left + leftPanelW, top + 2, left + leftPanelW + 1, top + imageHeight - 2, T.panelDivider);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
@@ -171,38 +218,37 @@ public class ShopScreen extends Screen {
         int sy = top + 11;
         int sw = imageWidth - leftPanelW - 24;
         int sh = 20;
-        int col = searchFocused ? 0x55FFFFFF : 0x55AAAAAA;
-        guiGraphics.fill(sx + 2, sy, sx + sw - 2, sy + 1, col);
-        guiGraphics.fill(sx + 2, sy + sh - 1, sx + sw - 2, sy + sh, col);
-        guiGraphics.fill(sx, sy + 2, sx + 1, sy + sh - 2, col);
-        guiGraphics.fill(sx + sw - 1, sy + 2, sx + sw, sy + sh - 2, col);
+        if (T.searchBg != 0) {
+            fillRoundedRect(guiGraphics, sx, sy, sw, sh, T.searchBg);
+        }
+        GuiDraw.inputBox(guiGraphics, sx, sy, sw, sh, searchFocused);
 
         if (searchText.isEmpty() && !searchFocused) {
-            FontUtil.drawAutoFitText(guiGraphics, font, "没有钱？将有价格的物品放入出货箱以赚取货币~", sx + 4, sy + 4, sw - 8, 0x777777);
+            FontUtil.drawAutoFitText(guiGraphics, font, "没有钱？将有价格的物品放入出货箱以赚取货币~", GuiDraw.innerTextX(sx), GuiDraw.innerTextY(sy, sh), sw - 8, T.textHint);
         } else if (!searchText.isEmpty()) {
-            FontUtil.drawAutoFitText(guiGraphics, font, searchText, sx + 4, sy + 4, sw - 8, 0xFFFFFF);
+            FontUtil.drawAutoFitText(guiGraphics, font, searchText, GuiDraw.innerTextX(sx), GuiDraw.innerTextY(sy, sh), sw - 8, T.searchText);
         }
 
         if (searchFocused) {
             int cursorX = sx + 4 + (searchText.isEmpty() ? 0 : font.width(searchText));
-            guiGraphics.fill(cursorX, sy + 3, cursorX + 1, sy + sh - 3, 0xFFFFFFFF);
+            guiGraphics.fill(cursorX, sy + 3, cursorX + 1, sy + sh - 3, T.searchCursor);
         }
     }
 
     private void renderEditModeIndicator(GuiGraphics guiGraphics, int left, int top) {
         Component editLabel = Component.literal("[编辑模式]");
         int labW = this.font.width(editLabel);
-        guiGraphics.drawString(this.font, editLabel, left + imageWidth - labW - 6, top + imageHeight - 14, 0xFFFF4444);
+        guiGraphics.drawString(this.font, editLabel, left + imageWidth - labW - 6, top + imageHeight - 14, T.textError, GuiDraw.shadow());
     }
 
     private void renderCategories(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
         Component title = Component.translatable("gui.shop.categories");
         int titleW = this.font.width(title);
-        float titleScale = 1.3f;
+        float titleScale = T.titleFontScale;
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(left + (leftPanelW - titleW * titleScale) / 2, top + 13, 0);
         guiGraphics.pose().scale(titleScale, titleScale, 1.0f);
-        guiGraphics.drawString(this.font, title, 0, 0, 0xFFAA00);
+        guiGraphics.drawString(this.font, title, 0, 0, T.catTitleText, GuiDraw.shadow());
         guiGraphics.pose().popPose();
 
         int catStartY = top + 40;
@@ -224,20 +270,25 @@ public class ShopScreen extends Screen {
                               mouseY >= bgY && mouseY <= bgY + bgH;
             boolean selected = cat.equals(currentCategory) && !isSearching;
 
-            int borderColor = 0xFF4488FF;
-            guiGraphics.fill(bgX + 2, bgY, bgX + bgW - 2, bgY + 1, borderColor);
-            guiGraphics.fill(bgX + 2, bgY + bgH - 1, bgX + bgW - 2, bgY + bgH, borderColor);
-            guiGraphics.fill(bgX, bgY + 2, bgX + 1, bgY + bgH - 2, borderColor);
-            guiGraphics.fill(bgX + bgW - 1, bgY + 2, bgX + bgW, bgY + bgH - 2, borderColor);
-
+            // 底色：现代主题用纯色药丸（catPillBg / catPillSelectedBg），经典主题退化为填色 + 边框
+            int fillColor = 0;
             if (selected) {
-                guiGraphics.fill(bgX + 2, bgY + 1, bgX + bgW - 2, bgY + bgH - 1, 0x444488FF);
+                fillColor = T.catPillSelectedBg != 0 ? T.catPillSelectedBg : T.catSelectedFill;
             } else if (hovered) {
-                guiGraphics.fill(bgX + 2, bgY + 1, bgX + bgW - 2, bgY + bgH - 1, 0x22FFFFFF);
+                fillColor = T.catHoveredFill;
+            } else if (T.catPillBg != 0) {
+                fillColor = T.catPillBg;
+            }
+            if (fillColor != 0) {
+                fillRoundedRect(guiGraphics, bgX, bgY, bgW, bgH, fillColor);
+            }
+            if (T.drawCategoryBorder) {
+                drawRoundedBorder(guiGraphics, bgX, bgY, bgW, bgH, T.catBorder);
             }
 
             int textY = bgY + (bgH - this.font.lineHeight) / 2;
-            FontUtil.drawAutoFitCentered(guiGraphics, this.font, cat, bgX + bgW / 2, textY, bgW - 4, 0x88CCFF);
+            int textColor = selected && T.catPillSelectedBg != 0 ? T.textPrimary : T.catText;
+            FontUtil.drawAutoFitCentered(guiGraphics, this.font, cat, bgX + bgW / 2, textY, bgW - 4, textColor);
         }
 
         renderCategoryScrollbar(guiGraphics, left, catStartY, available, maxVisible);
@@ -247,10 +298,10 @@ public class ShopScreen extends Screen {
             int btnH = 18;
             boolean hovered = mouseX >= left + 5 && mouseX <= left + leftPanelW - 5 &&
                               mouseY >= btnY && mouseY <= btnY + btnH;
-            int btnColor = hovered ? 0xAA44AA44 : 0x88333333;
-            guiGraphics.fill(left + 5, btnY, left + 5 + leftPanelW - 10, btnY + btnH, btnColor);
+            int btnColor = hovered ? T.addSlotBgHovered : T.addSlotBgNormal;
+            fillRoundedRect(guiGraphics, left + 5, btnY, leftPanelW - 10, btnH, btnColor);
             Component addCat = Component.literal("+ 添加分类");
-            FontUtil.drawAutoFitCentered(guiGraphics, this.font, addCat.getString(), left + leftPanelW / 2, btnY + 5, leftPanelW - 14, 0x88FF88);
+            FontUtil.drawAutoFitCentered(guiGraphics, this.font, addCat.getString(), left + leftPanelW / 2, btnY + 5, leftPanelW - 14, T.addSlotText);
         }
     }
 
@@ -258,10 +309,10 @@ public class ShopScreen extends Screen {
         int maxScroll = Math.max(0, categories.size() - visibleCount);
         if (maxScroll <= 0) return;
         int sbX = left + leftPanelW - 2;
-        gui.fill(sbX, trackTop, sbX + 1, trackTop + trackH, 0x80333333);
+        gui.fill(sbX, trackTop, sbX + 1, trackTop + trackH, T.scrollbarTrack);
         int thumbH = Math.max(6, trackH * visibleCount / categories.size());
         int thumbY = trackTop + (trackH - thumbH) * categoryScrollOffset / maxScroll;
-        gui.fill(sbX, thumbY, sbX + 1, thumbY + thumbH, 0xCCAAAAAA);
+        gui.fill(sbX, thumbY, sbX + 1, thumbY + thumbH, T.scrollbarThumb);
     }
 
     private void renderItems(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
@@ -277,7 +328,7 @@ public class ShopScreen extends Screen {
 
         if (!ModNetwork.clientEditMode && totalSlots == 0) {
             FontUtil.drawAutoFitText(guiGraphics, this.font, Component.translatable("gui.shop.no_items"),
-                    left + leftPanelW + 20, top + 50, imageWidth - leftPanelW - 40, 0x888888);
+                    left + leftPanelW + 20, top + 50, imageWidth - leftPanelW - 40, T.textDisabled);
             return;
         }
 
@@ -297,15 +348,17 @@ public class ShopScreen extends Screen {
                 int by = y + gap;
                 int bw = gridSpacingX - gap * 2;
                 int bh = gridSpacingY - gap * 2;
-                guiGraphics.fill(bx, by, bx + bw, by + 1, 0xFF444444);
-                guiGraphics.fill(bx, by + bh - 1, bx + bw, by + bh, 0xFF444444);
-                guiGraphics.fill(bx, by, bx + 1, by + bh, 0xFF444444);
-                guiGraphics.fill(bx + bw - 1, by, bx + bw, by + bh, 0xFF444444);
+                if (T.cellBg != 0) {
+                    fillRoundedRect(guiGraphics, bx, by, bw, bh, T.cellBg);
+                }
+                if (T.drawCellBorder) {
+                    drawRoundedBorder(guiGraphics, bx, by, bw, bh, T.cellBorder);
+                }
 
                 boolean hovered = mouseX >= x && mouseX <= x + gridSpacingX &&
                                   mouseY >= y && mouseY <= y + gridSpacingY;
                 if (hovered) {
-                    guiGraphics.fill(bx + 1, by + 1, bx + bw - 1, by + bh - 1, 0x44AAFF88);
+                    fillRoundedRect(guiGraphics, bx + 1, by + 1, bw - 2, bh - 2, T.cellHoveredFill);
                 }
 
                 ItemStack stack = entry.createStack();
@@ -319,8 +372,8 @@ public class ShopScreen extends Screen {
                     guiGraphics.pose().pushPose();
                     guiGraphics.pose().translate(0, 0, 200);
                     guiGraphics.pose().translate(qtyX, qtyY, 0);
-                    guiGraphics.pose().scale(0.6f, 0.6f, 1.0f);
-                    guiGraphics.drawString(this.font, qtyStr, 0, 0, 0xFFFFFF);
+                    guiGraphics.pose().scale(T.qtyTextScale, T.qtyTextScale, 1.0f);
+                    guiGraphics.drawString(this.font, qtyStr, 0, 0, T.textPrimary, GuiDraw.shadow());
                     guiGraphics.pose().popPose();
                 }
 
@@ -331,12 +384,12 @@ public class ShopScreen extends Screen {
                     tradeStr = entry.tradeType() == ShopEntry.TradeType.BUY ? "购买" : "出售";
                 }
                 guiGraphics.pose().pushPose();
-                float tradeScale = 0.85f;
+                float tradeScale = T.tradeTypeScale;
                 int tradeX = x + (gridSpacingX - (int)(font.width(tradeStr) * tradeScale)) / 2;
                 int tradeY = y + 2;
                 guiGraphics.pose().translate(tradeX, tradeY, 0);
                 guiGraphics.pose().scale(tradeScale, tradeScale, 1.0f);
-                guiGraphics.drawString(this.font, tradeStr, 0, 0, 0xFFFFAA);
+                guiGraphics.drawString(this.font, tradeStr, 0, 0, T.textTradeType, GuiDraw.shadow());
                 guiGraphics.pose().popPose();
 
                 String bottomStr;
@@ -346,7 +399,7 @@ public class ShopScreen extends Screen {
                 } else {
                     bottomStr = "¥" + entry.price();
                 }
-                FontUtil.drawAutoFitCentered(guiGraphics, this.font, bottomStr, x + gridSpacingX / 2, y + gridSpacingY - 10, gridSpacingX - 4, 0x88FF88);
+                FontUtil.drawAutoFitCentered(guiGraphics, this.font, bottomStr, x + gridSpacingX / 2, y + gridSpacingY - 10, gridSpacingX - 4, T.textPrice);
             }
         }
 
@@ -365,10 +418,10 @@ public class ShopScreen extends Screen {
         int trackTop = gridStartY;
         int trackH = GRID_ROWS * gridSpacingY;
         int sbX = left + leftPanelW + 14 + GRID_COLS * gridSpacingX + 3;
-        gui.fill(sbX, trackTop, sbX + 3, trackTop + trackH, 0x80333333);
+        gui.fill(sbX, trackTop, sbX + 3, trackTop + trackH, T.scrollbarTrack);
         int thumbH = Math.max(6, trackH * visibleSlots / totalSlots);
         int thumbY = trackTop + (trackH - thumbH) * scrollOffset / maxScroll;
-        gui.fill(sbX, thumbY, sbX + 3, thumbY + thumbH, 0xCCAAAAAA);
+        gui.fill(sbX, thumbY, sbX + 3, thumbY + thumbH, T.scrollbarThumb);
     }
 
     private void renderAddSlot(GuiGraphics guiGraphics, int x, int y, int mouseX, int mouseY) {
@@ -379,19 +432,24 @@ public class ShopScreen extends Screen {
         int bh = gridSpacingY - gap * 2;
         boolean hovered = mouseX >= x && mouseX <= x + gridSpacingX &&
                           mouseY >= y && mouseY <= y + gridSpacingY;
-        int bgColor = hovered ? 0xAA44AA44 : 0x88333333;
-        guiGraphics.fill(bx, by, bx + bw, by + 1, 0x66444444);
-        guiGraphics.fill(bx, by + bh - 1, bx + bw, by + bh, 0x66444444);
-        guiGraphics.fill(bx, by, bx + 1, by + bh, 0x66444444);
-        guiGraphics.fill(bx + bw - 1, by, bx + bw, by + bh, 0x66444444);
-        guiGraphics.fill(bx + 1, by + 1, bx + bw - 1, by + bh - 1, bgColor);
+        if (T.cellBg != 0) {
+            fillRoundedRect(guiGraphics, bx, by, bw, bh, T.cellBg);
+        }
+        if (T.drawCellBorder) {
+            drawRoundedBorder(guiGraphics, bx, by, bw, bh, T.addSlotBorder);
+        }
+        fillRoundedRect(guiGraphics, bx + 1, by + 1, bw - 2, bh - 2,
+                hovered ? T.addSlotBgHovered : T.addSlotBgNormal);
 
         Component plus = Component.literal("+");
         int pw = this.font.width(plus);
-        guiGraphics.drawString(this.font, plus, x + (gridSpacingX - pw) / 2, y + (gridSpacingY - 9) / 2, 0x88FF88);
+        guiGraphics.drawString(this.font, plus, x + (gridSpacingX - pw) / 2, y + (gridSpacingY - 9) / 2, T.addSlotText, GuiDraw.shadow());
     }
 
     private void renderItemTooltips(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
+        // 每帧重置悬停目标，鼠标不在任何条目上时就清空（Del 才不会误删）
+        hoveredEntry = null;
+        hoveredEntryCategory = null;
         List<ShopEntry> display = filteredEntries != null ? filteredEntries : allEntries;
         if (display == null) return;
         int gridStartX = left + leftPanelW + 14;
@@ -411,6 +469,9 @@ public class ShopScreen extends Screen {
                     guiGraphics.renderTooltip(this.font, Component.literal("添加商品"), mouseX, mouseY);
                 } else {
                     ShopEntry entry = display.get(i);
+                    // 记录悬停条目，供编辑模式的 Del 删除使用
+                    hoveredEntry = entry;
+                    hoveredEntryCategory = categoryOf(entry);
                     int qty = entry.quantity();
                     String itemName = entry.getDisplayName().getString();
                     String preview;
@@ -473,18 +534,22 @@ public class ShopScreen extends Screen {
         int balW = leftPanelW - 8;
         int balH = 30;
 
-        int borderCol = 0x55FFD700;
-        guiGraphics.fill(balX + 2, balY, balX + balW - 2, balY + 1, borderCol);
-        guiGraphics.fill(balX + 2, balY + balH - 1, balX + balW - 2, balY + balH, borderCol);
-        guiGraphics.fill(balX, balY + 2, balX + 1, balY + balH - 2, borderCol);
-        guiGraphics.fill(balX + balW - 1, balY + 2, balX + balW, balY + balH - 2, borderCol);
+        // 余额卡：底色三档兜底（balanceBg → cellBg → listRowBg），边框两档兜底（balanceBorder → 主题框色），
+        // 保证任何主题下「余额」都有一个看得见的框
+        int balBgCol = T.balanceBg != 0 ? T.balanceBg : (T.cellBg != 0 ? T.cellBg : T.listRowBg);
+        if (balBgCol != 0) fillRoundedRect(guiGraphics, balX, balY, balW, balH, balBgCol);
+        int borderCol = T.balanceBorder != 0 ? T.balanceBorder
+                : (T.panelDivider != 0 ? T.panelDivider : GuiDraw.frameColor());
+        if (borderCol != 0) {
+            drawRoundedBorder(guiGraphics, balX, balY, balW, balH, borderCol);
+        }
 
         Component label = Component.translatable("gui.shop.balance");
         int labelW = this.font.width(label);
-        guiGraphics.drawString(this.font, label, left + (leftPanelW - labelW) / 2, balY + 3, 0xFFD700);
+        guiGraphics.drawString(this.font, label, left + (leftPanelW - labelW) / 2, balY + 3, T.balanceText, GuiDraw.shadow());
 
         Component amount = Component.literal("¥" + String.format("%,d", balance));
-        FontUtil.drawAutoFitCentered(guiGraphics, this.font, amount.getString(), left + leftPanelW / 2, balY + 15, leftPanelW - 12, 0xFFFFFF);
+        FontUtil.drawAutoFitCentered(guiGraphics, this.font, amount.getString(), left + leftPanelW / 2, balY + 15, leftPanelW - 12, T.textPrimary);
     }
 
     @Override
@@ -781,25 +846,69 @@ public class ShopScreen extends Screen {
         int menuY = Math.min(contextMenuY, height - menuH - 2);
         menuX = Math.max(2, menuX);
         menuY = Math.max(2, menuY);
-        gui.fill(menuX, menuY, menuX + menuW, menuY + menuH, 0xCC222222);
-        gui.fill(menuX, menuY, menuX + menuW, menuY + 1, 0xFF888888);
-        gui.fill(menuX, menuY + menuH - 1, menuX + menuW, menuY + menuH, 0xFF888888);
-        gui.fill(menuX, menuY, menuX + 1, menuY + menuH, 0xFF888888);
-        gui.fill(menuX + menuW - 1, menuY, menuX + menuW, menuY + menuH, 0xFF888888);
+        gui.fill(menuX, menuY, menuX + menuW, menuY + menuH, T.ctxMenuBg);
+        gui.fill(menuX, menuY, menuX + menuW, menuY + 1, T.ctxMenuBorder);
+        gui.fill(menuX, menuY + menuH - 1, menuX + menuW, menuY + menuH, T.ctxMenuBorder);
+        gui.fill(menuX, menuY, menuX + 1, menuY + menuH, T.ctxMenuBorder);
+        gui.fill(menuX + menuW - 1, menuY, menuX + menuW, menuY + menuH, T.ctxMenuBorder);
         for (int i = 0; i < options.size(); i++) {
             int optY = menuY + 2 + i * optH;
             boolean hovered = mouseX >= menuX && mouseX <= menuX + menuW &&
                               mouseY >= optY && mouseY <= optY + optH;
             if (hovered) {
-                gui.fill(menuX + 1, optY, menuX + menuW - 1, optY + optH, 0x444488FF);
+                gui.fill(menuX + 1, optY, menuX + menuW - 1, optY + optH, T.ctxMenuItemHover);
             }
-            FontUtil.drawAutoFitText(gui, font, options.get(i), menuX + 6, optY + 2, menuW - 12, 0xFFFFFF);
+            FontUtil.drawAutoFitText(gui, font, options.get(i), menuX + 6, optY + 2, menuW - 12, T.textPrimary);
         }
     }
 
+    /** 按当前主题的 cornerRadius 画圆角矩形 */
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x + 2, y, x + w - 2, y + h, color);
-        g.fill(x, y + 2, x + w, y + h - 2, color);
+        if (color == 0 || w <= 0 || h <= 0) return;
+        int r = Math.max(0, Math.min(T.cornerRadius, Math.min(w, h) / 2));
+        if (r <= 2) {
+            // 经典主题只有 2px 切角，用原快速路径
+            g.fill(x + 2, y, x + w - 2, y + h, color);
+            g.fill(x, y + 2, x + w, y + h - 2, color);
+            return;
+        }
+        g.fill(x, y + r, x + w, y + h - r, color);
+        for (int i = 0; i < r; i++) {
+            int dy = r - i - 1;
+            int inset = r - (int) Math.round(Math.sqrt((double) (r * r - dy * dy)));
+            g.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - i - 1, x + w - inset, y + h - i, color);
+        }
+    }
+
+    /** 画 1px 圆角边框（形状与 fillRoundedRect 对应） */
+    private void drawRoundedBorder(GuiGraphics g, int x, int y, int w, int h, int color) {
+        if (color == 0 || w <= 0 || h <= 0) return;
+        int r = Math.max(0, Math.min(T.cornerRadius, Math.min(w, h) / 2));
+        if (r <= 2) {
+            g.fill(x + 2, y, x + w - 2, y + 1, color);
+            g.fill(x + 2, y + h - 1, x + w - 2, y + h, color);
+            g.fill(x, y + 2, x + 1, y + h - 2, color);
+            g.fill(x + w - 1, y + 2, x + w, y + h - 2, color);
+            return;
+        }
+        g.fill(x, y + r, x + 1, y + h - r, color);
+        g.fill(x + w - 1, y + r, x + w, y + h - r, color);
+        g.fill(x + r, y, x + w - r, y + 1, color);
+        g.fill(x + r, y + h - 1, x + w - r, y + h, color);
+        for (int i = 0; i < r; i++) {
+            int dy = r - i - 1;
+            int inset = r - (int) Math.round(Math.sqrt((double) (r * r - dy * dy)));
+            g.fill(x + inset, y + i, x + inset + 1, y + i + 1, color);
+            g.fill(x + w - inset - 1, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - i - 1, x + inset + 1, y + h - i, color);
+            g.fill(x + w - inset - 1, y + h - i - 1, x + w - inset, y + h - i, color);
+        }
+    }
+
+    /** 面板外框 */
+    private void drawPanelBorder(GuiGraphics g, int x, int y, int w, int h, int color) {
+        drawRoundedBorder(g, x, y, w, h, color);
     }
 
     @Override
@@ -829,6 +938,17 @@ public class ShopScreen extends Screen {
         if (contextMenuOpen) {
             closeContextMenu();
             return true;
+        }
+        // 编辑模式：Del 删除悬停商品，Ctrl+Z 撤销
+        if (ModNetwork.clientEditMode) {
+            if (keyCode == 261) {          // Del
+                deleteHoveredEntry();
+                return true;
+            }
+            if (keyCode == 90 && (modifiers & 0x2) != 0) {   // Ctrl+Z
+                undoLastDelete();
+                return true;
+            }
         }
         // 按下背包键（E）或商店键（K）时关闭商店
         if (isToggleKey) {
@@ -860,6 +980,7 @@ public class ShopScreen extends Screen {
     public boolean charTyped(char codePoint, int modifiers) {
         if (searchFocused) {
             searchText = searchText + codePoint;
+            ensureAllCategoriesCached();
             filterEntries();
             scrollOffset = 0;
             return true;
@@ -971,9 +1092,15 @@ public class ShopScreen extends Screen {
         closeContextMenu();
         this.categories = newCategories;
         if (currentCategory == null || category.equals(currentCategory)) {
+            // 只有「切换了分类」才把滚动位置归零；
+            // 同一分类的数据刷新（复制/编辑/删除商品后服务端回推）必须保留 scrollOffset，
+            // 否则在第五排以后操作会突然跳回最上面。
+            boolean categoryChanged = !category.equals(this.currentCategory);
             this.currentCategory = category;
             this.allEntries = entries;
-            scrollOffset = 0;
+            if (categoryChanged) {
+                scrollOffset = 0;
+            }
         }
         this.balance = balance;
         // 该分类的计数整体替换，避免残留上一次的数据
@@ -985,6 +1112,49 @@ public class ShopScreen extends Screen {
         categoryCache.put(category, entries);
         filterEntries();
         JeiBridge.setSellBoxRecipes(category, entries);
+    }
+
+    /** Del：删除鼠标悬停的商品（仅编辑模式）*/
+    private void deleteHoveredEntry() {
+        if (hoveredEntry == null) return;
+        String cat = hoveredEntryCategory != null ? hoveredEntryCategory : currentCategory;
+        java.util.List<ShopEntry> list = categoryCache.get(cat);
+        if (list == null) list = allEntries;
+        if (list == null) return;
+        int idx = list.indexOf(hoveredEntry);
+        if (idx < 0) return;
+
+        undoStack.push(new DeletedItem(cat, idx, hoveredEntry));
+        while (undoStack.size() > UNDO_LIMIT) undoStack.removeLast();
+
+        ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
+                "remove_item", cat, "", "", 0, idx, false, "", 1, ""));
+        hoveredEntry = null;
+        hoveredEntryCategory = null;
+        refreshFromConfig();
+    }
+
+    /** Ctrl+Z：撤销最近一次 Del 删除 */
+    private void undoLastDelete() {
+        DeletedItem d = undoStack.poll();
+        if (d == null) {
+            if (minecraft != null && minecraft.player != null) {
+                minecraft.player.displayClientMessage(
+                        Component.literal("\u00a77没有可撤销的删除"), true);
+            }
+            return;
+        }
+        ShopEntry e = d.entry;
+        // 1.20.1 的 ShopEntry.nbt 是 CompoundTag，包里传字符串（服务端再 parseTag）
+        String nbtStr = e.nbt() != null ? e.nbt().toString() : "";
+        String barterNbtStr = e.barterNbt() != null ? e.barterNbt().toString() : "";
+        ModNetwork.CHANNEL.sendToServer(new ModNetwork.ShopEditPacket(
+                "add_item", d.category, e.itemId().toString(), e.tradeType().name().toLowerCase(),
+                e.price(), d.index, e.requireOp(), e.extraData(), e.quantity(), e.customName(),
+                e.barterItemId() != null ? e.barterItemId().toString() : "",
+                e.barterItemQty(), nbtStr, e.strictMatch(),
+                barterNbtStr, e.barterStrictMatch()));
+        refreshFromConfig();
     }
 
     /** 该条目的交易额度是否已被用尽 */
@@ -1005,10 +1175,24 @@ public class ShopScreen extends Screen {
         return Math.max(0, entry.tradeLimit() - limitUsed.getOrDefault(key, 0));
     }
 
+    /**
+     * 服务端改了配置后重新拉数据。
+     * <p>分类被删掉时不能盲选 {@code categories.get(0)}——那会强制跳回最上面。
+     * 这里保底选择：旧分类还在就保持；否则选它原来的位置（被删后接替它的那个分类）；
+     * 只有当前位置也越界了才回到第一个。
+     */
     public void refreshFromConfig() {
+        int oldIndex = currentCategory != null ? categories.indexOf(currentCategory) : -1;
         closeContextMenu();
         if (currentCategory == null || !categories.contains(currentCategory)) {
-            currentCategory = categories.isEmpty() ? null : categories.get(0);
+            if (categories.isEmpty()) {
+                currentCategory = null;
+            } else if (oldIndex >= 0) {
+                currentCategory = categories.get(Math.min(oldIndex, categories.size() - 1));
+            } else {
+                currentCategory = categories.get(0);
+            }
+            scrollOffset = 0;
         }
         if (currentCategory != null) {
             sendOpenRequest();

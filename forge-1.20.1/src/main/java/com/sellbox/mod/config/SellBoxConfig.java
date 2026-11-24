@@ -25,6 +25,8 @@ public class SellBoxConfig {
     private static final Map<String, Integer> PRICES_NBT = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> PENDING = new ConcurrentHashMap<>();
     private static boolean sdmCurrencyEnabled = false;
+    private static boolean vaultCurrencyEnabled = false;
+    private static boolean vssCurrencyEnabled = false;
     private static Path configDir;
     private static Path sellBoxDir;
     private static Path priceFile;
@@ -43,8 +45,11 @@ public class SellBoxConfig {
     public static final ForgeConfigSpec SPEC;
     public static ForgeConfigSpec.IntValue SELL_TIME;
     public static ForgeConfigSpec.BooleanValue USE_SDM_CURRENCY;
+    public static ForgeConfigSpec.BooleanValue USE_VAULT_CURRENCY;
+    public static ForgeConfigSpec.BooleanValue USE_VSS_CURRENCY;
     public static ForgeConfigSpec.BooleanValue GLOBAL_PRICING;
     public static ForgeConfigSpec.BooleanValue GLOBAL_SHOP;
+    public static ForgeConfigSpec.BooleanValue EXTRAS_ENABLED;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -57,6 +62,14 @@ public class SellBoxConfig {
                 .comment("是否使用 SDM 经济系统（默认 false，使用本模组内置经济；当 SDMShop 加载时设为 true 使用 SDM 经济）")
                 .define("useSdmCurrency", false);
 
+        USE_VAULT_CURRENCY = builder
+                .comment("是否使用 Vault 经济（仅混合端 Arclight/Mohist 等有效，纯 Forge 端无 Bukkit 会自动回落内置经济）")
+                .define("useVaultCurrency", false);
+
+        USE_VSS_CURRENCY = builder
+                .comment("是否使用 ViScriptShop 经济（默认 false；装了 ViScriptShop 时设为 true 使用 VSS 经济）")
+                .define("useVssCurrency", false);
+
         GLOBAL_PRICING = builder
                 .comment("物品收购价是否全局共享（默认 true，所有存档共享同一份收购价；设为 false 则按存档分别保存）")
                 .define("globalPricing", true);
@@ -64,6 +77,10 @@ public class SellBoxConfig {
         GLOBAL_SHOP = builder
                 .comment("商店配置是否全局共享（默认 true，所有存档共享同一份商店配置；设为 false 则按存档分别保存）")
                 .define("globalShop", true);
+
+        EXTRAS_ENABLED = builder
+                .comment("扩展功能总开关（默认 true）：关闭后签到/邮箱/兑换/开箱/好友等全部不可用，可用 /sellbox adminshop extras on|off 切换")
+                .define("extrasEnabled", true);
 
         SPEC = builder.build();
     }
@@ -128,6 +145,14 @@ public class SellBoxConfig {
         return GLOBAL_SHOP.get();
     }
 
+    public static boolean isExtrasEnabled() {
+        return EXTRAS_ENABLED.get();
+    }
+
+    public static void setExtrasEnabled(boolean value) {
+        EXTRAS_ENABLED.set(value);
+    }
+
     public static boolean isSdmCurrencyEnabled() {
         return sdmCurrencyEnabled;
     }
@@ -139,6 +164,30 @@ public class SellBoxConfig {
     public static void setSdmCurrencyEnabled(boolean value) {
         sdmCurrencyEnabled = value;
         USE_SDM_CURRENCY.set(value);
+        saveSdmFlag();
+    }
+
+    public static boolean isVaultCurrencyEnabled() {
+        return vaultCurrencyEnabled && USE_VAULT_CURRENCY.get();
+    }
+
+    public static void setVaultCurrencyEnabled(boolean value) {
+        vaultCurrencyEnabled = value;
+        USE_VAULT_CURRENCY.set(value);
+    }
+
+    public static boolean isVssCurrencyEnabled() {
+        return vssCurrencyEnabled && USE_VSS_CURRENCY.get();
+    }
+
+    public static void setVssCurrencyEnabled(boolean value) {
+        vssCurrencyEnabled = value;
+        USE_VSS_CURRENCY.set(value);
+        // VSS 与 SDM 都是「外部经济接管」，互斥
+        if (value) {
+            sdmCurrencyEnabled = false;
+            USE_SDM_CURRENCY.set(false);
+        }
         saveSdmFlag();
     }
 

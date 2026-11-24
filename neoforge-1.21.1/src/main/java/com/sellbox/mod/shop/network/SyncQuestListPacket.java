@@ -12,16 +12,21 @@ import java.util.List;
 public record SyncQuestListPacket(List<QuestGroupInfo> groups) implements CustomPacketPayload {
     public static final Type<SyncQuestListPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "sync_quest_list"));
 
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final StreamCodec<FriendlyByteBuf, SyncQuestListPacket> CODEC = StreamCodec.of(
             (buf, payload) -> {
                 buf.writeVarInt(payload.groups.size());
                 for (QuestGroupInfo g : payload.groups) {
-                    buf.writeUtf(g.groupName);
+                    buf.writeUtf(safe(g.groupName));
                     buf.writeVarInt(g.quests.size());
                     for (QuestInfo q : g.quests) {
                         buf.writeLong(q.questId);
-                        buf.writeUtf(q.questName);
-                        buf.writeUtf(q.chapterName);
+                        buf.writeUtf(safe(q.questName));
+                        buf.writeUtf(safe(q.chapterName));
                     }
                 }
             },

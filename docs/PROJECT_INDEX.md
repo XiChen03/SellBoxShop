@@ -13,9 +13,9 @@
 | 类数 / 行数 | 95 / 19,607 | 106 / 20,123 |
 | 加载器 | Forge 47.4.20 | NeoForge 21.1.220 |
 | MC / Java / Gradle | 1.20.1 / 17 / 8.8 | 1.21.1 / 21 / 9.2.1 |
-| mod_id / 名称 / 版本 | `sellbox` / SellBoxShop / 1.5.3 | 同 |
+| mod_id / 名称 / 版本 | `sellbox` / SellBoxShop / 1.5.5 | 同 |
 | 作者 | 曦辰（gradle.properties） | Xichen（`neoforge.mods.toml` 硬编码） |
-| 产物 | `build/libs/SellBoxShop-1.5.3-Forge-1.20.1.jar` | `build/libs/SellBoxShop-1.5.3-NeoForge-1.21.1.jar` |
+| 产物 | `build/libs/SellBoxShop-1.5.5-Forge-1.20.1.jar` | `build/libs/SellBoxShop-1.5.5-NeoForge-1.21.1.jar` |
 | 网络模型 | 单 `SimpleChannel` + 26 个内嵌 record | 一包一类 `CustomPacketPayload` + 注册表，共 24 个 |
 
 补充事实：
@@ -76,7 +76,7 @@ cd neoforge-1.21.1 && .\gradlew.bat build
 | `integration` | 可选模组反射桥接 | `CuriosIntegration`、`FTBQuestsIntegration`、`TabIntegration` |
 | `integration/jei` | 把商店条目呈现为 JEI 配方 | `ShopJeiPlugin`、`ShopTradeCategory`、`JeiBridge` |
 | `item` | 货币类物品与方块物品 | `MoneyItem`、`GoldCoinItem`、`CoinBagItem` |
-| `mixin` | 槽位堆叠上限修补 | `SlotMixin` |
+| `mixin` | 已移除（原 `SlotMixin` 只影响小上限槽位，已恢复原版规则） | — |
 | `network` | 网络层（Forge：`ModNetwork`；NeoForge：`ModPayloads` + 各 Payload） | 见 §6 |
 | `playershop` | 玩家商店：市场/备货台方块、容器、界面、数据 | `PlayerShopRegistry`、`PlayerShopConfig`、`PlayerShopScreen` |
 | `registry` | DeferredRegister 汇总 | `ModBlocks`、`ModItems`、`ModMenuTypes` |
@@ -157,8 +157,7 @@ cd neoforge-1.21.1 && .\gradlew.bat build
 
 ### 4.11 `mixin`
 
-- **SlotMixin** — 唯一 mixin：`@Inject(method="getMaxStackSize", at=HEAD, cancellable)` 后返回 `stack.getMaxStackSize()`，把「槽位上限 ∩ 物品上限」改成「物品自身上限」，让 54 格容器能收下 >64 堆叠。
-  - **注册差异**：Forge `sellbox.mixins.json` 的 `mixins` 含 `SlotMixin` 且声明 `refmap`；**NeoForge 的 `sellbox.mixins.json` 里 `mixins` 是空数组**，`SlotMixin.java` 实际未被加载（见 §9）。
+- **已移除**：原 `SlotMixin` 会对所有 `Slot` 放宽物品堆叠上限，实际只影响护甲槽等小上限槽位，并不能让普通 64 堆叠物品变成 99；Forge 侧还因缺少 `MixinConfigs`/refmap 从未加载。为避免两端行为不一致和潜在刷物，已删除 `SlotMixin.java`、`sellbox.mixins.json` 及 NeoForge 的 `[[mixins]]` 声明，恢复原版槽位规则。54 格容器的 `getMaxStackSize()=99` 仍对本身允许 >64 的物品生效。
 
 ### 4.12 `network`
 
@@ -287,7 +286,7 @@ cd neoforge-1.21.1 && .\gradlew.bat build
 | Curios | 货币放饰品栏显示余额 | 反射（Forge 另有 `CuriosMoneyItem` 直接实现） | 只影响饰品栏玩法 |
 | FTB Quests | 条目解锁前置任务 | 全反射，只读查询 | `QuestPickerScreen` 空列表 |
 | SDMShop（Forge） | 外部经济 | 反射多个候选类名 | 回落内置经济 |
-| VSS / viScriptShop（NeoForge） | 外部经济 | 反射 `ViScriptShopServerUtil` | 回落内置经济 |
+| VSS / viScriptShop（NeoForge） | 外部经济 | 反射 `ViScriptShopServerUtil`，**双签名探测兼容 1.1.x(int) / 1.2.x+(double)** | 回落内置经济 |
 | NEZNAMY TAB | 计分板/TAB 显示余额 | 反射注册占位符 | 无占位符 |
 
 ---
@@ -333,7 +332,7 @@ data/curios/tags/item/  13 个饰品栏位标签（head/necklace/ring/belt/body/
 
 i18n 命名空间：`itemGroup.sellbox`、`block.sellbox.*`、`item.sellbox.*`、`gui.sellbox.*`、`gui.shop.*`、`message.sellbox.*`、`command.sellbox.*`、`tooltip.sellbox.*`、`key.sellbox.shop` / `key.categories.sellbox`。
 
-**NeoForge 侧残留**：`assets/examplemod/lang/en_us.json`（628 B，模板文件）被打进 jar；同时 `neoforge.mods.toml` 里没有 Forge 那份 `mod_authors/mod_description` 占位符，作者名硬编码为 `Xichen`。
+**NeoForge 侧残留**：`assets/examplemod/lang/en_us.json` 曾被打进 jar，现已删除；`neoforge.mods.toml` 里没有 Forge 那份 `mod_authors/mod_description` 占位符，作者名硬编码为 `Xichen`。
 
 ---
 
@@ -361,7 +360,7 @@ i18n 命名空间：`itemGroup.sellbox`、`block.sellbox.*`、`item.sellbox.*`�
 - `SellBoxEconomy`：Forge 实现 `IEconomy`；NeoForge 不实现，由 `SellBoxMod` 匿名适配后注入 `SellBoxEconomyAPI`。
 - 玩家商店黑名单：Forge 有独立类 + 下发客户端 + 编辑时校验；NeoForge 只在 `PlayerShopConfig` 里存取，**编辑流程未校验、也未下发**。
 - 语言文件键集合不同：Forge 有 `command.sellbox.nbt_prices_cleared`、`gui.sellbox.inventory_shop_button`、4 个 `message.sellbox.trade_success_*`、`key.categories.sellbox`、`message.sellbox.sdm_not_found`；NeoForge 独有 `message.sellbox.{barter_success,buy_success,sell_success,trade_success,trade_not_found,vss_not_found,not_owner_market,not_owner_stock}`。
-- 打包：Forge jar 含 `pack.mcmeta`（94 B）；**NeoForge 的 `src/main/resources` 与产物 jar 里都没有 `pack.mcmeta`**。
+- 打包：两端现在都包含 `pack.mcmeta`；Forge 为 15，NeoForge 为 34。NeoForge 的 `assets/examplemod` 模板语言文件已移除。
 
 ---
 
@@ -369,15 +368,15 @@ i18n 命名空间：`itemGroup.sellbox`、`block.sellbox.*`、`item.sellbox.*`�
 
 按影响排序（均为静态检查结论，未实测复现）：
 
-1. **NeoForge 侧 mixin 未生效** — `neoforge-1.21.1/src/main/resources/sellbox.mixins.json` 的 `mixins` 为空数组，`SlotMixin` 虽存在但不会加载；两端 `SlotMixin` 代码完全相同。若 1.21.1 需要 >64 堆叠的行为，这是遗漏。
-2. **NeoForge 无 `pack.mcmeta`** — 1.21.1 的资源包通常要求 jar 根目录有该文件；Forge 侧有。需实际启动确认资源（贴图/语言）是否完整加载。
-3. **1.21.1 的 `examplemod` 语言文件被打包** — 会在 `assets/examplemod/lang/en_us.json` 留下模板键。
+1. ~~**`SlotMixin` 未生效/两端不一致**~~ — 已整体移除该 mixin 与注册；原实现只会放宽护甲槽等小上限槽位，并不能实现普通物品 99 堆叠，删除后恢复原版规则。
+2. ~~**NeoForge 无 `pack.mcmeta`**~~ — 已补 `pack_format = 34`，并验证产物 jar 内含该文件。
+3. ~~**1.21.1 的 `examplemod` 语言文件被打包**~~ — 已删除 `assets/examplemod`。
 4. **死代码** — 两端 `ShopMenu.handleTrade`、Forge `PlayerShopMenu.handleTrade`、Forge `TradeHandler` 均无调用者；`ModernShopScreen`、`ModernTradeConfirmScreen`、`ModernPlayerShopScreen`、`ThemeSwitchScreen` 四个界面没有实例化点（现代 UI 与主题切换无入口）。
 5. **NeoForge 黑名单未接编辑流程** — `PlayerShopConfig.isBlacklisted` 只在命令里有入口，`PlayerShopEditPayload` 未调用，且没有下发客户端的包，等于 1.21.1 上黑名单功能不完整。
 6. **NeoForge 全局配置分支不可达** — `PlayerShopConfig.init(configDir)`、`SellBoxEconomy.init(configDir)` 已实现但没有调用点，`SellBoxMod` 只调 `initPerWorld`；同理 Forge 的 `TradeLimitTracker` 全局入口。
 7. **旧 NBT 模型残留** — `ShopItemPickerScreen`、`PlayerShopItemPickerScreen` 内仍有 `record ItemInfo(..., CompoundTag variantNbt, ...)`，与 `ShopEntry` 的组件补丁 JSON 模型并存，转换可能丢数据。
-8. **网络状态挂在静态字段** — `ModPayloads.client*`（Forge `ModNetwork.client*`）是全局静态，重连/换服依赖 `SyncShopConfigPayload` 覆盖，无显式重置。
-9. **构建脚本硬编码路径** — `into 'C:\Users\Administrator\Desktop\坚果云'`，换用户或换机器会写失败。
+8. **网络状态挂在静态字段** — `ModPayloads.client*`（Forge `ModNetwork.client*`）是全局静态，重连/换服依赖 `SyncShopConfigPayload` 覆盖，无显式重置；extras 的 state/response 已在断开时清空。
+9. **构建脚本硬编码路径（已降级）** — 仍写死 `C:\Users\Administrator\Desktop\坚果云`，但复制任务已加 `onlyIf`，目录不存在时跳过而不是让 build 失败。
 10. **两端不同步风险** — 本目录是副本，`README.md` 明确写「修改不同步」；两端手工对齐，容易出现 §8.3 那类偏差。
 
 ---

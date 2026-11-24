@@ -10,60 +10,63 @@ public class ThemePresets {
         return new GuiTheme();
     }
 
-    /** 浅色主题 */
+    /** 浅色主题：白粉 */
     public static GuiTheme light() {
         GuiTheme t = new GuiTheme();
-        // 面板
+        // 面板：奶白底 + 粉色层次
         t.screenBackground = 0x00000000;
-        t.mainPanelBg      = 0xFFE8E8E8;
-        t.leftPanelBg      = 0xFFDEDEDE;
-        t.popupBg          = 0xFFF0F0F0;
-        t.accentStripe     = 0xFF2266CC;
-        t.panelDivider     = 0xFFBBBBBB;
-        t.separatorLine    = 0xFF999999;
+        t.mainPanelBg      = 0xFFFFF7FA;
+        t.leftPanelBg      = 0xFFFFEAF2;
+        t.popupBg          = 0xFFFFFBFD;
+        t.accentStripe     = 0xFFE86A9A;
+        t.panelDivider     = 0xFFF0C6D6;
+        t.separatorLine    = 0xFFE6A8BF;
         // 按钮
-        t.btnBorder        = 0xFF2266CC;
-        t.btnBgNormal      = 0x88CCCCCC;
-        t.btnBgHovered     = 0x44000000;
-        t.btnText          = 0x222222;
+        t.btnBorder        = 0xFFE86A9A;
+        t.btnBgNormal      = 0x55F3B6C9;
+        t.btnBgHovered     = 0x88F19BB8;
+        t.btnBgGreenNormal = 0x55F3B6C9;
+        t.btnBgGreenHovered= 0x88F19BB8;
+        t.btnText          = 0xFF5A2A3A;
         // 分类
-        t.catBorder        = 0xFF2266CC;
-        t.catSelectedFill  = 0x442266CC;
-        t.catHoveredFill   = 0x22000000;
-        t.catText          = 0xFF2266CC;
-        t.catTitleText     = 0xFF884400;
+        t.catBorder        = 0xFFE86A9A;
+        t.catSelectedFill  = 0x44E86A9A;
+        t.catHoveredFill   = 0x22E86A9A;
+        t.catText          = 0xFFB23A68;
+        t.catTitleText     = 0xFF8A3B5A;
         // 网格
-        t.cellBorder       = 0xFFBBBBBB;
-        t.cellSelectedFill = 0x442266CC;
-        t.cellHoveredFill  = 0x30000000;
-        // 文字
-        t.textPrimary      = 0x222222;
-        t.textSecondary    = 0x444444;
-        t.textMuted        = 0x777777;
-        t.textHint         = 0xAAAAAA;
-        t.textTitle        = 0xFF444444;
-        t.textPrice        = 0xFF008800;
-        t.textTotal        = 0xFFCC8800;
-        t.textTradeType    = 0xFF444444;
-        t.textCategoryName = 0xFF2266CC;
+        t.cellBorder       = 0xFFF2C9D8;
+        t.cellSelectedFill = 0x44E86A9A;
+        t.cellHoveredFill  = 0x30F19BB8;
+        // 文字：深梅色，白粉底上保持可读
+        t.textPrimary      = 0xFF3A2730;
+        t.textSecondary    = 0xFF5C404B;
+        t.textMuted        = 0xFF8A6572;
+        t.textHint         = 0xFFA98693;
+        t.textTitle        = 0xFF7A2F4F;
+        t.textPrice        = 0xFFB03A63;
+        t.textTotal        = 0xFFA05A00;
+        t.textTradeType    = 0xFF4A3540;
+        t.textCategoryName = 0xFFB23A68;
         // 槽位
-        t.slotBagBorder    = 0xFFCC8800;
-        t.slotReceiptBorder= 0xFF9944CC;
-        t.slotInnerFill    = 0xFFD0D0D0;
-        t.slotLabelText    = 0xFF333333;
+        t.slotBagBorder    = 0xFFD99A3A;
+        t.slotReceiptBorder= 0xFFB06ACB;
+        t.slotInnerFill    = 0xFFFFEFF5;
+        t.slotLabelText    = 0xFF5A3A47;
         // 输入框
-        t.inputBorderFocused   = 0x882266CC;
-        t.inputBorderUnfocused = 0x88999999;
+        t.inputBorderFocused   = 0xCCE86A9A;
+        t.inputBorderUnfocused = 0x99D9A8BA;
         // 滚动条
-        t.scrollbarTrack  = 0x80CCCCCC;
-        t.scrollbarThumb  = 0xCC888888;
+        t.scrollbarTrack  = 0x55F0C6D6;
+        t.scrollbarThumb  = 0xCCE86A9A;
         // 右键菜单
-        t.ctxMenuBg       = 0xDDF0F0F0;
-        t.ctxMenuBorder   = 0xFF999999;
-        t.ctxMenuItemHover= 0x442266CC;
+        t.ctxMenuBg       = 0xEEFFF7FA;
+        t.ctxMenuBorder   = 0xFFE6A8BF;
+        t.ctxMenuItemHover= 0x33E86A9A;
         // 余额
-        t.balanceBorder   = 0x55CC8800;
-        t.balanceText     = 0xFFCC8800;
+        t.balanceBorder   = 0x66E86A9A;
+        t.balanceText     = 0xFFC0426F;
+        t.textShadow      = false;
         return t;
     }
 

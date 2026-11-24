@@ -126,17 +126,12 @@ public class CuriosIntegration {
         return ItemStack.EMPTY;
     }
 
-    private static boolean cachedHasMoney = false;
-    private static long lastMoneyCheck = 0;
-
     public static boolean hasMoneyEquipped(LivingEntity entity) {
         if (entity == null) return false;
-        long now = System.currentTimeMillis();
-        if (now - lastMoneyCheck > 500) {
-            lastMoneyCheck = now;
-            cachedHasMoney = hasMoneyInCurios(entity) || entity.getItemBySlot(EquipmentSlot.HEAD).is(ModItems.MONEY.get());
-        }
-        return cachedHasMoney;
+        // 不要做全局缓存：不同玩家/不同实体共用同一份缓存会串数据；
+        // 这里只是查一次 Curios + 头盔，开销可接受。
+        return hasMoneyInCurios(entity)
+                || entity.getItemBySlot(EquipmentSlot.HEAD).is(ModItems.MONEY.get());
     }
 
     public static boolean tryEquipToCurios(Player player, ItemStack stack) {

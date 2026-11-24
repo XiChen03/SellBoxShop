@@ -4,78 +4,95 @@ import com.sellbox.mod.SellBoxMod;
 import com.sellbox.mod.integration.VSSIntegration;
 import com.sellbox.mod.network.ModPayloads;
 import com.sellbox.mod.shop.network.ShopOpenPayload;
-import com.sellbox.mod.registry.ModMenuTypes;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * 物品栏界面（按 E 打开）中副手框上方的商店按钮。
- * 点击后打开 K 键对应的商店页面。
+ * 物品栏界面里的商店按钮，生存背包与创造背包各有一个位置。
+ * <p>
+ * <b>实现方式：纯事件绘制，不挂成 widget。</b>
+ * 原因：{@code CreativeModeInventoryScreen} 切页签时会调 {@code rebuildWidgets()}，
+ * 把 {@code ScreenEvent.Init.Post} 里 addListener 进去的 widget 全部清掉，
+ * 而 rebuildWidgets 不会再触发一次 Init.Post —— 表现就是「第一次打开有按钮，切个页签就没了」。
+ * 改成在 {@code ScreenEvent.Render.Post} 里直接画、在 {@code MouseButtonPressed.Pre} 里判定点击，
+ * 就不受任何 UI 重建影响。
  */
-public class InventoryShopButton {
-    private static final ResourceLocation SELLBOX_ICON = ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "textures/item/sellbox1.png");
+public final class InventoryShopButton {
+    private static final ResourceLocation SELLBOX_ICON =
+            ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "textures/item/sellbox1.png");
 
-    // 副手槽在 InventoryMenu 中的偏移（77, 62），相对于界面左上角
-    private static final int OFFHAND_X = 77;
-    private static final int OFFHAND_Y = 62;
-    private static final int SLOT_SIZE = 16;
-    private static final int GAP = 5; // 副手框上方 5px
+    private static final int ICON_SIZE = 16;
 
-    private static int getButtonX(InventoryScreen screen) {
-        return screen.getGuiLeft() + OFFHAND_X;
-    }
+    // ── 生存背包：副手槽（InventoryMenu 偏移 77,62）上方 5px ──
+    private static final int SURVIVAL_X = 77;
+    private static final int SURVIVAL_Y = 62 - ICON_SIZE - 5;
 
-    private static int getButtonY(InventoryScreen screen) {
-        return screen.getGuiTop() + OFFHAND_Y - SLOT_SIZE - GAP;
+    private static final Component TITLE = Component.literal("打开商店");
+
+    private InventoryShopButton() {
     }
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener(InventoryShopButton::onRender);
+        NeoForge.EVENT_BUS.addListener(InventoryShopButton::onScreenRender);
         NeoForge.EVENT_BUS.addListener(InventoryShopButton::onMouseClick);
     }
 
-    public static void onRender(ScreenEvent.Render.Post event) {
-        if (!(event.getScreen() instanceof InventoryScreen screen)) return;
-        if (screen.getMenu() == null) return;
+    /** 只有生存背包显示；创造背包不显示 */
+    private static boolean applies(Screen screen) {
+        return screen instanceof InventoryScreen i && i.getMenu() != null;
+    }
 
-        int x = getButtonX(screen);
-        int y = getButtonY(screen);
+    private static int iconX(AbstractContainerScreen<?> screen) {
+        return screen.getGuiLeft() + SURVIVAL_X;
+    }
 
-        GuiGraphics gui = event.getGuiGraphics();
-        int mouseX = event.getMouseX();
-        int mouseY = event.getMouseY();
-        boolean hovered = mouseX >= x && mouseX <= x + SLOT_SIZE && mouseY >= y && mouseY <= y + SLOT_SIZE;
+    private static int iconY(AbstractContainerScreen<?> screen) {
+        return screen.getGuiTop() + SURVIVAL_Y;
+    }
 
-        // 仅显示出货箱图标（无背景、无边框）
-        gui.blit(SELLBOX_ICON, x, y, 0, 0, SLOT_SIZE, SLOT_SIZE, SLOT_SIZE, SLOT_SIZE);
+    private static void onScreenRender(ScreenEvent.Render.Post event) {
+        Screen screen = event.getScreen();
+        if (!applies(screen) || !(screen instanceof AbstractContainerScreen<?> container)) return;
 
-        // 悬浮提示
+        int x = iconX(container);
+        int y = iconY(container);
+        int mx = event.getMouseX();
+        int my = event.getMouseY();
+        boolean hovered = mx >= x && mx < x + ICON_SIZE && my >= y && my < y + ICON_SIZE;
+
+        GuiGraphics g = event.getGuiGraphics();
         if (hovered) {
-            gui.renderTooltip(Minecraft.getInstance().font, Component.literal("打开商店"), mouseX, mouseY);
+            g.fill(x - 1, y - 1, x + ICON_SIZE + 1, y + ICON_SIZE + 1, 0x33FFFFFF);
+        }
+        g.blit(SELLBOX_ICON, x, y, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+        if (hovered) {
+            g.renderTooltip(Minecraft.getInstance().font, java.util.List.of(TITLE),
+                    java.util.Optional.empty(), mx, my);
         }
     }
 
-    public static void onMouseClick(ScreenEvent.MouseButtonPressed.Pre event) {
+    private static void onMouseClick(ScreenEvent.MouseButtonPressed.Pre event) {
         if (event.getButton() != 0) return;
-        if (!(event.getScreen() instanceof InventoryScreen screen)) return;
-        if (screen.getMenu() == null) return;
+        Screen screen = event.getScreen();
+        if (!applies(screen) || !(screen instanceof AbstractContainerScreen<?> container)) return;
 
-        int x = getButtonX(screen);
-        int y = getButtonY(screen);
-        double mouseX = event.getMouseX();
-        double mouseY = event.getMouseY();
+        int x = iconX(container);
+        int y = iconY(container);
+        double mx = event.getMouseX();
+        double my = event.getMouseY();
+        if (mx < x || mx >= x + ICON_SIZE || my < y || my >= y + ICON_SIZE) return;
 
-        if (mouseX >= x && mouseX <= x + SLOT_SIZE && mouseY >= y && mouseY <= y + SLOT_SIZE) {
-            openShop();
-            event.setCanceled(true);
-        }
+        event.setCanceled(true);
+        openShop();
     }
 
     private static void openShop() {

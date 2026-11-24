@@ -1,5 +1,6 @@
 package com.sellbox.mod.util;
 
+import com.sellbox.mod.gui.GuiDraw;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -15,14 +16,14 @@ public class FontUtil {
     public static void drawAutoFitText(GuiGraphics g, Font font, String text, int x, int y, int maxWidth, int color) {
         int w = font.width(text);
         if (w <= maxWidth || maxWidth <= 0) {
-            g.drawString(font, text, x, y, color, false);
+            g.drawString(font, text, x, y, color, com.sellbox.mod.gui.GuiDraw.shadow());
             return;
         }
         float scale = (float) maxWidth / w;
         g.pose().pushPose();
         g.pose().translate(x, y, 0);
         g.pose().scale(scale, scale, 1.0f);
-        g.drawString(font, text, 0, 0, color, false);
+        g.drawString(font, text, 0, 0, color, com.sellbox.mod.gui.GuiDraw.shadow());
         g.pose().popPose();
     }
 
@@ -33,7 +34,7 @@ public class FontUtil {
     public static void drawAutoFitCentered(GuiGraphics g, Font font, String text, int centerX, int y, int maxWidth, int color) {
         int w = font.width(text);
         if (w <= maxWidth || maxWidth <= 0) {
-            g.drawString(font, text, centerX - w / 2, y, color, false);
+            g.drawString(font, text, centerX - w / 2, y, color, com.sellbox.mod.gui.GuiDraw.shadow());
             return;
         }
         float scale = (float) maxWidth / w;
@@ -41,7 +42,7 @@ public class FontUtil {
         g.pose().pushPose();
         g.pose().translate(centerX - scaledW / 2, y, 0);
         g.pose().scale(scale, scale, 1.0f);
-        g.drawString(font, text, 0, 0, color, false);
+        g.drawString(font, text, 0, 0, color, com.sellbox.mod.gui.GuiDraw.shadow());
         g.pose().popPose();
     }
 

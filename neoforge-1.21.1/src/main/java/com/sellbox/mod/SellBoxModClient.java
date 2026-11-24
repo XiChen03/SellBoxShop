@@ -28,11 +28,17 @@ import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
 @Mod(value = SellBoxMod.MODID, dist = Dist.CLIENT)
 public class SellBoxModClient {
     public static KeyMapping shopKey;
+    public static KeyMapping themeKey;
+    public static KeyMapping extrasKey;
 
     public SellBoxModClient(IEventBus modEventBus, ModContainer container) {
         modEventBus.addListener(this::onRegisterMenuScreens);
         modEventBus.addListener(this::onRegisterKeyMappings);
+        modEventBus.addListener(this::onRegisterGuiLayers);
         NeoForge.EVENT_BUS.register(Tooltips.class);
+        NeoForge.EVENT_BUS.addListener(SellBoxModClient::onThemeKey);
+        NeoForge.EVENT_BUS.addListener(SellBoxModClient::onExtrasKey);
+        NeoForge.EVENT_BUS.addListener(SellBoxModClient::onLoggingOut);
         com.sellbox.mod.shop.InventoryShopButton.register();
     }
 
@@ -40,6 +46,59 @@ public class SellBoxModClient {
         shopKey = new KeyMapping("打开管理员商店", 75, "SellBox");
         event.register(shopKey);
         ShopKeyHandler.register(shopKey);
+        themeKey = new KeyMapping("切换GUI主题", 76, "SellBox"); // L
+        event.register(themeKey);
+        extrasKey = new KeyMapping("key.sellbox.extras", 79, "SellBox"); // O
+        event.register(extrasKey);
+    }
+
+    /** L 键打开主题切换界面 */
+    private static void onThemeKey(net.neoforged.neoforge.client.event.InputEvent.Key event) {
+        if (themeKey == null || !themeKey.consumeClick()) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.screen instanceof com.sellbox.mod.gui.ThemeSwitchScreen) {
+            mc.setScreen(null);
+            return;
+        }
+        if (mc.player != null && mc.screen == null) {
+            com.sellbox.mod.gui.ThemeSwitchScreen.open();
+        }
+    }
+
+    /** O 键打开扩展功能面板（签到/邮箱/兑换/转账/兑换码/好友） */
+    private static void onExtrasKey(net.neoforged.neoforge.client.event.InputEvent.Key event) {
+        if (extrasKey == null || !extrasKey.consumeClick()) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && mc.screen == null) {
+            if (com.sellbox.mod.network.ModPayloads.clientConfigSynced
+                    && !com.sellbox.mod.network.ModPayloads.clientExtrasEnabled) {
+                mc.player.displayClientMessage(
+                        net.minecraft.network.chat.Component.translatable("extras.msg.disabled"), true);
+                return;
+            }
+            com.sellbox.mod.extras.client.ExtrasActions.open();
+            mc.setScreen(new com.sellbox.mod.extras.client.ExtrasScreen());
+        }
+    }
+
+    /**
+     * 断开（退出世界 / 被踢 / 换服）时清掉所有客户端静态状态。
+     * <p>
+     * 这些状态挂在静态字段上，不会随实例销毁；不清就会串服。
+     */
+    private static void onLoggingOut(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        com.sellbox.mod.extras.client.ExtrasClientState.reset();
+        com.sellbox.mod.extras.client.ExtrasNoticeQueue.clear();
+        com.sellbox.mod.network.ModPayloads.clientPrices.clear();
+        com.sellbox.mod.network.ModPayloads.clientExtrasState = "";
+        com.sellbox.mod.network.ModPayloads.clientExtrasResponse = "";
+    }
+
+    /** 注册右下角成就式提醒层（HUD 最上层，GUI 打开时也能看到） */
+    private void onRegisterGuiLayers(net.neoforged.neoforge.client.event.RegisterGuiLayersEvent event) {
+        event.registerAboveAll(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "extras_notice"),
+                com.sellbox.mod.extras.client.ExtrasNoticeOverlay::render);
     }
 
     private void onRegisterMenuScreens(RegisterMenuScreensEvent event) {

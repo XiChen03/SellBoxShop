@@ -1,5 +1,6 @@
 package com.sellbox.mod.playershop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.gui.ModernTheme;
 import com.sellbox.mod.shop.ShopEntry;
@@ -229,10 +230,10 @@ public class ModernPlayerShopScreen extends Screen {
         boolean hovered = mx >= x && mx <= x + cellW && my >= y && my <= y + cellH;
 
         g.fill(x, y, x + cellW, y + cellH, hovered ? T.cellHoveredFill : T.leftPanelBg);
-        g.fill(x, y, x + cellW, y + 1, T.cellBorder);
-        g.fill(x, y + cellH - 1, x + cellW, y + cellH, T.cellBorder);
-        g.fill(x, y, x + 1, y + cellH, T.cellBorder);
-        g.fill(x + cellW - 1, y, x + cellW, y + cellH, T.cellBorder);
+        g.fill(x, y, x + cellW, y + 1, GuiDraw.frameColor());
+        g.fill(x, y + cellH - 1, x + cellW, y + cellH, GuiDraw.frameColor());
+        g.fill(x, y, x + 1, y + cellH, GuiDraw.frameColor());
+        g.fill(x + cellW - 1, y, x + cellW, y + cellH, GuiDraw.frameColor());
 
         // 物品图标
         ItemStack stack = item.createStack();
@@ -243,7 +244,7 @@ public class ModernPlayerShopScreen extends Screen {
 
         // 交易类型
         String label = item.tradeType() == ShopEntry.TradeType.BUY ? "Buy" : "Sell";
-        int labelColor = item.tradeType() == ShopEntry.TradeType.BUY ? T.textPrice : 0xFFFF9800;
+        int labelColor = item.tradeType() == ShopEntry.TradeType.BUY ? T.textPrice : T.textTitle;
         drawCenteredText(g, font, label, x + cellW / 2, y + cellH - 18, labelColor);
 
         // 价格
@@ -304,11 +305,11 @@ public class ModernPlayerShopScreen extends Screen {
 
     private void drawCenteredText(GuiGraphics g, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
         int w = font.width(text);
-        g.drawString(font, text, x - w / 2, y, color, true);
+        g.drawString(font, text, x - w / 2, y, color,GuiDraw.shadow());
     }
 
     private void drawText(GuiGraphics g, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
-        g.drawString(font, text, x, y, color, true);
+        g.drawString(font, text, x, y, color,GuiDraw.shadow());
     }
 
     @Override

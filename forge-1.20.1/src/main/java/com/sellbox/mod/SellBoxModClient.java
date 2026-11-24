@@ -28,12 +28,19 @@ import net.minecraft.ChatFormatting;
 
 public class SellBoxModClient {
     public static KeyMapping shopKey;
+    public static KeyMapping themeKey;
+    public static KeyMapping extrasKey;
 
     public SellBoxModClient(IEventBus modEventBus) {
         modEventBus.addListener(this::onClientSetup);
         modEventBus.addListener(this::onRegisterKeyMappings);
         MinecraftForge.EVENT_BUS.register(Tooltips.class);
         MinecraftForge.EVENT_BUS.register(BalanceOverlay.class);
+        MinecraftForge.EVENT_BUS.addListener(SellBoxModClient::onRenderNotices);
+        MinecraftForge.EVENT_BUS.addListener(SellBoxModClient::onThemeKey);
+        MinecraftForge.EVENT_BUS.addListener(SellBoxModClient::onExtrasKey);
+        MinecraftForge.EVENT_BUS.addListener(SellBoxModClient::onLoggingOut);
+        MinecraftForge.EVENT_BUS.register(com.sellbox.mod.extras.client.SweeperDustbinButtons.class);
         com.sellbox.mod.integration.JEIIntegration.init();
     }
 
@@ -41,6 +48,26 @@ public class SellBoxModClient {
         shopKey = new KeyMapping("key.sellbox.shop", 75, "key.categories.sellbox");
         event.register(shopKey);
         ShopKeyHandler.register(shopKey);
+        themeKey = new KeyMapping("key.sellbox.theme", 76, "key.categories.sellbox"); // L
+        event.register(themeKey);
+        extrasKey = new KeyMapping("key.sellbox.extras", 79, "key.categories.sellbox"); // O
+        event.register(extrasKey);
+    }
+
+    /**
+     * 断开（退出世界 / 被踢 / 换服）时清掉所有客户端静态状态。
+     */
+    private static void onLoggingOut(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        com.sellbox.mod.extras.client.ExtrasClientState.reset();
+        com.sellbox.mod.extras.client.ExtrasNoticeQueue.clear();
+        com.sellbox.mod.network.ModNetwork.clientPrices.clear();
+        com.sellbox.mod.network.ModNetwork.clientExtrasState = "";
+        com.sellbox.mod.network.ModNetwork.clientExtrasResponse = "";
+    }
+
+    /** 右下角成就式提醒（HUD 最上层，GUI 打开时也能看到） */
+    private static void onRenderNotices(net.minecraftforge.client.event.RenderGuiEvent.Post event) {
+        com.sellbox.mod.extras.client.ExtrasNoticeOverlay.render(event.getGuiGraphics());
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {
@@ -49,6 +76,34 @@ public class SellBoxModClient {
             MenuScreens.register(PlayerShopRegistry.MARKET_MENU.get(), MarketScreen::new);
             MenuScreens.register(PlayerShopRegistry.STOCK_MENU.get(), StockScreen::new);
         });
+    }
+
+    /** L 键打开主题切换界面 */
+    private static void onThemeKey(net.minecraftforge.client.event.InputEvent.Key event) {
+        if (themeKey == null || !themeKey.consumeClick()) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.screen instanceof com.sellbox.mod.gui.ThemeSwitchScreen) {
+            mc.setScreen(null);
+            return;
+        }
+        if (mc.player != null && mc.screen == null) {
+            com.sellbox.mod.gui.ThemeSwitchScreen.open();
+        }
+    }
+
+    /** O 键打开扩展功能面板（签到/邮箱/兑换/转账/兑换码/好友） */
+    private static void onExtrasKey(net.minecraftforge.client.event.InputEvent.Key event) {
+        if (extrasKey == null || !extrasKey.consumeClick()) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && mc.screen == null) {
+            if (ModNetwork.clientConfigSynced && !ModNetwork.clientExtrasEnabled) {
+                mc.player.displayClientMessage(
+                        net.minecraft.network.chat.Component.translatable("extras.msg.disabled"), true);
+                return;
+            }
+            com.sellbox.mod.extras.client.ExtrasActions.open();
+            mc.setScreen(new com.sellbox.mod.extras.client.ExtrasScreen());
+        }
     }
 
     public static class Tooltips {

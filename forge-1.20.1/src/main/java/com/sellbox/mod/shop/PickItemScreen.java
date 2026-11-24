@@ -1,5 +1,6 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.Minecraft;
@@ -12,6 +13,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 public class PickItemScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private int popupW = 360;
     private int popupH = 290;
     private static final int INV_COLS = 9;
@@ -87,12 +90,13 @@ public class PickItemScreen extends Screen {
         this.minecraft.setScreen(parentScreen);
     }
 
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x00000000);
+    public void renderBackground(GuiGraphics g) {
+        // 背景在 render 开头自绘，这里阻止原版再盖一层
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        guiGraphics.fill(0, 0, this.width, this.height, T.screenBackground);
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
         int cx = this.width / 2;
@@ -100,11 +104,11 @@ public class PickItemScreen extends Screen {
         int left = cx - popupW / 2;
         int top = cy - popupH / 2;
 
-        fillRoundedRect(guiGraphics, left, top, popupW, popupH, 0xFF333333);
-        guiGraphics.fill(left + 2, top, left + popupW - 2, top + 1, 0xFFFFAA00);
+        fillRoundedRect(guiGraphics, left, top, popupW, popupH, T.popupBg);
+        guiGraphics.fill(left + 2, top, left + popupW - 2, top + 1, T.accentStripe);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        FontUtil.drawAutoFitCentered(guiGraphics, this.font, "从背包选择物品", cx, top + 8, popupW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(guiGraphics, this.font, "从背包选择物品", cx, top + 8, popupW - 10, T.textTitle);
 
         int slotStartX = left + (popupW - INV_COLS * (invSlotSize + 2)) / 2;
         int slotStartY = top + 26;
@@ -121,7 +125,7 @@ public class PickItemScreen extends Screen {
             ItemStack stack = inventoryItems != null ? inventoryItems[i] : ItemStack.EMPTY;
             boolean isEmpty = stack == null || stack.isEmpty();
 
-            guiGraphics.fill(sx, sy, sx + invSlotSize, sy + invSlotSize, 0x66444444);
+            guiGraphics.fill(sx, sy, sx + invSlotSize, sy + invSlotSize, T.cellBorder);
 
             if (!isEmpty) {
                 guiGraphics.renderItem(stack, sx + 4, sy + 4);
@@ -131,19 +135,19 @@ public class PickItemScreen extends Screen {
                     BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(selectedItemId);
 
             if (isSelected) {
-                guiGraphics.fill(sx - 1, sy - 1, sx + invSlotSize + 1, sy + invSlotSize + 1, 0xAAFFAA00);
+                guiGraphics.fill(sx - 1, sy - 1, sx + invSlotSize + 1, sy + invSlotSize + 1, T.cellInInventory);
             } else if (hovered && !isEmpty) {
-                guiGraphics.fill(sx - 1, sy - 1, sx + invSlotSize + 1, sy + invSlotSize + 1, 0x66FFFFFF);
+                guiGraphics.fill(sx - 1, sy - 1, sx + invSlotSize + 1, sy + invSlotSize + 1, T.cellHoveredFill);
             }
         }
 
         FontUtil.drawAutoFitText(guiGraphics, this.font, "选中: " + selectedItemName,
-                left + 10, top + 155, popupW - 20, 0xFFD700);
+                left + 10, top + 155, popupW - 20, T.textTotal);
 
-        FontUtil.drawAutoFitText(guiGraphics, this.font, "价格:", left + 15, top + 177, popupW - 20, 0xFFFFFF);
-        FontUtil.drawAutoFitText(guiGraphics, this.font, "类型:", left + 15, top + 202, popupW - 20, 0xFFFFFF);
+        FontUtil.drawAutoFitText(guiGraphics, this.font, "价格:", left + 15, top + 177, popupW - 20, T.textPrimary);
+        FontUtil.drawAutoFitText(guiGraphics, this.font, "类型:", left + 15, top + 202, popupW - 20, T.textPrimary);
         FontUtil.drawAutoFitText(guiGraphics, this.font, "请在背包中选择一个物品",
-                left + 15, top + popupH - 20, popupW - 30, 0x888888);
+                left + 15, top + popupH - 20, popupW - 30, T.textMuted);
     }
 
     @Override

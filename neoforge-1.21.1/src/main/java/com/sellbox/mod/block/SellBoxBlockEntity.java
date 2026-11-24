@@ -390,6 +390,13 @@ public class SellBoxBlockEntity extends BlockEntity implements Container {
                 ModPayloads.sendBalanceToPlayer(serverPlayer);
             }
             level.playSound(null, worldPosition, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5F, 1.2F);
+            // 邮箱互联：每件已售物品记一条流水 + 右下角一条提醒
+            for (SoldEntry sold : soldEntries) {
+                com.sellbox.mod.extras.ExtrasMailbox.record(serverPlayer, "sale",
+                        com.sellbox.mod.extras.ExtrasMailbox.SRC_SELLBOX,
+                        sold.itemId() == null ? null : sold.itemId().toString(),
+                        sold.count(), sold.totalValue());
+            }
             sendOnlineReceipt(serverPlayer, soldEntries, soldCount, value, bagFill, worldPosition);
         }
         appendReceiptToBook(soldEntries, value, bagFill, !ownerOnline);

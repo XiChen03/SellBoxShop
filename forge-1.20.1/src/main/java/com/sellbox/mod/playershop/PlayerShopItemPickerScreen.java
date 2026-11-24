@@ -1,5 +1,6 @@
 package com.sellbox.mod.playershop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.shop.PlayerInventoryPickerScreen;
 import com.sellbox.mod.shop.ShopButton;
 import com.sellbox.mod.shop.ShopEntry;
@@ -81,7 +82,7 @@ public class PlayerShopItemPickerScreen extends Screen {
     private int confirmBtnX, backBtnX, btnRowY, btnW, btnH;
 
     // 分隔线颜色
-    private static final int SEP_COLOR = 0xFF555555;
+    private int sepColor() { return T.separatorLine; }
 
     private String searchQuery = "";
     private com.sellbox.mod.util.ItemSortUtil.SortMode sortMode = com.sellbox.mod.util.ItemSortUtil.SortMode.NAME;
@@ -223,8 +224,8 @@ public class PlayerShopItemPickerScreen extends Screen {
         // 搜索框与右侧按钮区域隔离：宽度不超过排序按钮左缘
         searchW = Math.min(gridW, Math.max(8, sortBX - searchX - 6));
 
-        searchBox = new EditBox(font, searchX + searchBoxInset, searchY + 1,
-                searchW - searchBoxInset * 2, searchH - 2, Component.literal(""));
+        searchBox = new EditBox(font, GuiDraw.innerTextX(searchX), GuiDraw.innerTextY(searchY, searchH),
+                GuiDraw.innerWidth(searchW), searchH - 2, Component.literal(""));
         searchBox.setBordered(false);
         searchBox.setMaxLength(64);
         searchBox.setResponder(q -> { searchQuery = q.toLowerCase().trim(); scrollOffset = 0; jeiOffset = 0; applyFilter(); });
@@ -309,8 +310,8 @@ public class PlayerShopItemPickerScreen extends Screen {
         priceBoxX = panelLeft + panelW - priceBoxW - 10;
         priceBoxY = modeBarY;
 
-        priceBox = new EditBox(font, priceBoxX + 2, priceBoxY + 1,
-                priceBoxW - 4, priceBoxH - 2, Component.literal(""));
+        priceBox = new EditBox(font, GuiDraw.innerTextX(priceBoxX), GuiDraw.innerTextY(priceBoxY, priceBoxH),
+                GuiDraw.innerWidth(priceBoxW), priceBoxH - 2, Component.literal(""));
         priceBox.setBordered(false);
         priceBox.setMaxLength(9);
         priceBox.setFilter(s -> s.matches("\\d*"));
@@ -330,8 +331,8 @@ public class PlayerShopItemPickerScreen extends Screen {
         customNameY = modeBarY;
         customNameH = modeBtnH;
         if (customNameW >= 24) {
-            customNameBox = new EditBox(font, customNameX + 2, customNameY + 1,
-                    customNameW - 4, customNameH - 2, Component.literal(""));
+            customNameBox = new EditBox(font, GuiDraw.innerTextX(customNameX), GuiDraw.innerTextY(customNameY, customNameH),
+                    GuiDraw.innerWidth(customNameW), customNameH - 2, Component.literal(""));
             customNameBox.setBordered(false);
             customNameBox.setMaxLength(64);
             if (editEntry != null && editEntry.customName() != null) customNameBox.setValue(editEntry.customName());
@@ -349,8 +350,8 @@ public class PlayerShopItemPickerScreen extends Screen {
         int unlockBtnX = infoLeft + infoW - unlockBtnW - rightPad;
         int qtyCfmX = unlockBtnX - gap - qtyBtnW;
         qtyBoxX = qtyCfmX - gap - qtyBoxW;
-        qtyBox = new EditBox(font, qtyBoxX + 2, qtyBoxY + 1,
-                qtyBoxW - 4, qtyBoxH - 2, Component.literal(""));
+        qtyBox = new EditBox(font, GuiDraw.innerTextX(qtyBoxX), GuiDraw.innerTextY(qtyBoxY, qtyBoxH),
+                GuiDraw.innerWidth(qtyBoxW), qtyBoxH - 2, Component.literal(""));
         qtyBox.setBordered(false);
         qtyBox.setFilter(s -> s.matches("\\d*"));
         qtyBox.setMaxLength(4);
@@ -545,9 +546,15 @@ public class PlayerShopItemPickerScreen extends Screen {
         int tabH = 14;
         int tabX = panelLeft + 10;
         int tabY = panelTop - tabH + 2;
-        fillRoundedRect(g, tabX, tabY, tabW, tabH + 1, T.cellBorder);
+        // 页签：底色用 popupBg（够实，现代主题也看得见），描边用 frameColor。
+        // 之前整块用 frameColor 填充，现代主题下 cellBorder=0 → 退化成半透明白，
+        // 页签等于没画，文字就"飘"在面板外面了。
+        fillRoundedRect(g, tabX, tabY, tabW, tabH + 1, T.popupBg);
+        g.fill(tabX + 2, tabY, tabX + tabW - 2, tabY + 1, GuiDraw.frameColor());
+        g.fill(tabX, tabY + 2, tabX + 1, tabY + tabH - 1, GuiDraw.frameColor());
+        g.fill(tabX + tabW - 1, tabY + 2, tabX + tabW, tabY + tabH - 1, GuiDraw.frameColor());
         g.fill(tabX + 2, tabY + tabH, tabX + tabW - 2, tabY + tabH + 1, T.popupBg);
-        g.drawString(font, title, tabX + (tabW - font.width(title)) / 2, tabY + (tabH - font.lineHeight) / 2 + 1, T.textTitle);
+        g.drawString(font, title, tabX + (tabW - font.width(title)) / 2, tabY + (tabH - font.lineHeight) / 2 + 1, T.textTitle, GuiDraw.shadow());
 
         super.render(g, mx, my, pt);
 
@@ -555,12 +562,12 @@ public class PlayerShopItemPickerScreen extends Screen {
         boolean searchFocused = searchBox != null && searchBox.isFocused();
         drawBox(g, searchX, searchY, searchW, searchH, searchFocused);
         if (searchBox != null && searchBox.getValue().isEmpty() && !searchFocused) {
-            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.search_items").getString(), searchX + 6, searchY + 3, searchW - 12, T.textHint);
+            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.search_items").getString(), GuiDraw.innerTextX(searchX), GuiDraw.innerTextY(searchY, searchH), searchW - 12, T.textHint);
         }
 
         // ======== 分隔线1 ========
         int sep1Y = searchY + searchH + 4;
-        g.fill(panelLeft + 4, sep1Y, panelLeft + panelW - 4, sep1Y + 1, SEP_COLOR);
+        g.fill(panelLeft + 4, sep1Y, panelLeft + panelW - 4, sep1Y + 1, sepColor());
 
         // ======== 物品网格 ========
         g.enableScissor(v2s(gridX), v2s(gridTop), v2s(gridX + gridW), v2s(gridTop + gridH));
@@ -668,19 +675,19 @@ public class PlayerShopItemPickerScreen extends Screen {
 
         // ======== 分隔线2 ========
         int sep2Y = jeiTop + jeiH + 2;
-        g.fill(panelLeft + 4, sep2Y, panelLeft + panelW - 4, sep2Y + 1, SEP_COLOR);
+        g.fill(panelLeft + 4, sep2Y, panelLeft + panelW - 4, sep2Y + 1, sepColor());
 
         // ======== JEI 物品候选条 ========
         renderJeiRow(g, mx, my);
 
         // ======== 分隔线3 ========
         int sep3Y = modeBarY + modeBtnH + 2;
-        g.fill(panelLeft + 4, sep3Y, panelLeft + panelW - 4, sep3Y + 1, SEP_COLOR);
+        g.fill(panelLeft + 4, sep3Y, panelLeft + panelW - 4, sep3Y + 1, sepColor());
 
         // ======== 模式切换标签 ========
         int modeLabelX = panelLeft + 10;
         String modeLbl = Component.translatable("gui.sellbox.mode_label").getString() + ":";
-        g.drawString(font, modeLbl, modeLabelX, modeBarY + (modeBtnH - font.lineHeight) / 2, T.textMuted);
+        g.drawString(font, modeLbl, modeLabelX, modeBarY + (modeBtnH - font.lineHeight) / 2, T.textMuted, GuiDraw.shadow());
         // 仅显示出售按钮（店主仅可使用出售）
         FontUtil.drawAutoFitCentered(g, font, Component.translatable("gui.sellbox.sell_label").getString(), modeSellBtnX + modeBtnW / 2, modeBarY + (modeBtnH - font.lineHeight) / 2, modeBtnW - 4, T.textPrimary);
         // 匹配模式切换按钮（仅普通商品显示；以物易物在出价/商品名字下方各自切换）
@@ -694,13 +701,13 @@ public class PlayerShopItemPickerScreen extends Screen {
         boolean priceFocused = priceBox != null && priceBox.isFocused();
         drawBox(g, priceBoxX, priceBoxY, priceBoxW, priceBoxH, priceFocused);
         if (priceBox != null && priceBox.getValue().isEmpty() && !priceFocused) {
-            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.enter_price").getString(), priceBoxX + 6, priceBoxY + 3, priceBoxW - 12, T.textHint);
+            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.enter_price").getString(), GuiDraw.innerTextX(priceBoxX), GuiDraw.innerTextY(priceBoxY, priceBoxH), priceBoxW - 12, T.textHint);
         }
         // 自定义物品名框边框 + 占位文字
         boolean nameFocused = customNameBox != null && customNameBox.isFocused();
         if (customNameBox != null) drawBox(g, customNameX, customNameY, customNameW, customNameH, nameFocused);
         if (customNameBox != null && customNameBox.getValue().isEmpty() && !nameFocused) {
-            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.custom_name").getString(), customNameX + 6, customNameY + 3, customNameW - 12, T.textHint);
+            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.custom_name").getString(), GuiDraw.innerTextX(customNameX), GuiDraw.innerTextY(customNameY, customNameH), customNameW - 12, T.textHint);
         }
         // 数量框边框 + 占位文字（信息面板右下角）
         boolean qtyFocused = qtyBox != null && qtyBox.isFocused();
@@ -712,7 +719,7 @@ public class PlayerShopItemPickerScreen extends Screen {
         FontUtil.drawAutoFitText(g, font, qtyLabel, qtyLabelX, qtyBoxY + (qtyBoxH - font.lineHeight) / 2, qtyBoxX - qtyLabelX - 2, T.textSecondary);
         drawBox(g, qtyBoxX, qtyBoxY, qtyBoxW, qtyBoxH, qtyFocused);
         if (qtyBox != null && qtyBox.getValue().isEmpty() && !qtyFocused) {
-            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.quantity_hint").getString(), qtyBoxX + 6, qtyBoxY + 3, qtyBoxW - 12, T.textHint);
+            FontUtil.drawAutoFitText(g, font, Component.translatable("gui.sellbox.quantity_hint").getString(), GuiDraw.innerTextX(qtyBoxX), GuiDraw.innerTextY(qtyBoxY, qtyBoxH), qtyBoxW - 12, T.textHint);
         }
 
         g.pose().popPose();
@@ -770,7 +777,7 @@ public class PlayerShopItemPickerScreen extends Screen {
         String arrow = " → ";
         int arrowX = infoLeft + half - font.width(arrow) / 2;
         int arrowY = iconY + iconSize / 2 - font.lineHeight / 2;
-        g.drawString(font, arrow, arrowX, arrowY, T.textModeLabel);
+        g.drawString(font, arrow, arrowX, arrowY, T.textModeLabel, GuiDraw.shadow());
         // 右侧：商品物品
         if (goodsItem != null) {
             int ix2 = infoLeft + half + (half - iconSize) / 2;
@@ -799,17 +806,11 @@ public class PlayerShopItemPickerScreen extends Screen {
     }
 
     private void drawItemBorderColor(GuiGraphics g, int x, int y, int size, int color) {
-        g.fill(x, y, x + size, y + 1, color);
-        g.fill(x, y + size - 1, x + size, y + size, color);
-        g.fill(x, y, x + 1, y + size, color);
-        g.fill(x + size - 1, y, x + size, y + size, color);
+        GuiDraw.iconFrame(g, x, y, size);
     }
 
     private void drawItemBorder(GuiGraphics g, int x, int y, int size) {
-        g.fill(x, y, x + size, y + 1, 0xFF444444);
-        g.fill(x, y + size - 1, x + size, y + size, 0xFF444444);
-        g.fill(x, y, x + 1, y + size, 0xFF444444);
-        g.fill(x + size - 1, y, x + size, y + size, 0xFF444444);
+        GuiDraw.iconFrame(g, x, y, size);
     }
 
     private void renderJeiRow(GuiGraphics g, int mx, int my) {
@@ -830,10 +831,10 @@ public class PlayerShopItemPickerScreen extends Screen {
             boolean sel = filteredItems.get(idx).item == selectedItem;
             if (sel) g.fill(x, y, x + jeiItemW, y + jeiItemH, T.cellSelectedFill);
             else if (hover) g.fill(x, y, x + jeiItemW, y + jeiItemH, T.cellHoveredFill);
-            g.fill(x + 2, y, x + jeiItemW - 2, y + 1, 0x66444444);
-            g.fill(x + 2, y + jeiItemH - 1, x + jeiItemW - 2, y + jeiItemH, 0x66444444);
-            g.fill(x, y + 2, x + 1, y + jeiItemH - 2, 0x66444444);
-            g.fill(x + jeiItemW - 1, y + 2, x + jeiItemW, y + jeiItemH - 2, 0x66444444);
+            g.fill(x + 2, y, x + jeiItemW - 2, y + 1, GuiDraw.frameColor());
+            g.fill(x + 2, y + jeiItemH - 1, x + jeiItemW - 2, y + jeiItemH, GuiDraw.frameColor());
+            g.fill(x, y + 2, x + 1, y + jeiItemH - 2, GuiDraw.frameColor());
+            g.fill(x + jeiItemW - 1, y + 2, x + jeiItemW, y + jeiItemH - 2, GuiDraw.frameColor());
             ItemIcons.render(g, renderable(filteredItems.get(idx)), x + (jeiItemW - 16) / 2, y + (jeiItemH - 16) / 2);
             if (hover) gridHoverStack = renderable(filteredItems.get(idx)).copy();
         }
@@ -1152,11 +1153,7 @@ public class PlayerShopItemPickerScreen extends Screen {
     }
 
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? T.inputBorderFocused : T.inputBorderUnfocused;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

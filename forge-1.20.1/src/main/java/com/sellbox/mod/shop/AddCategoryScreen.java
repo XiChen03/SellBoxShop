@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.Minecraft;
@@ -9,6 +11,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public class AddCategoryScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private float sf;
     private int panelLeft, panelTop, panelW, panelH;
     private int cx;
@@ -67,7 +71,7 @@ public class AddCategoryScreen extends Screen {
         btnRowY = curY;
 
         int lx = panelLeft + pad;
-        nameBox = new EditBox(font, lx + (int) Math.round(2 * sf), nameBoxY + 1, nameBoxW - (int) Math.round(4 * sf), boxH - 2, Component.literal(""));
+        nameBox = new EditBox(font, GuiDraw.innerTextX(lx), GuiDraw.innerTextY(nameBoxY, boxH), GuiDraw.innerWidth(nameBoxW), boxH - 2, Component.literal(""));
         nameBox.setBordered(false);
         nameBox.setValue("");
         addRenderableWidget(nameBox);
@@ -90,7 +94,7 @@ public class AddCategoryScreen extends Screen {
                 btn -> { if (minecraft == null) minecraft = Minecraft.getInstance(); minecraft.setScreen(parentScreen); }));
     }
 
-    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {
+    public void renderBackground(GuiGraphics g) {
         g.fill(0, 0, this.width, this.height, 0x00000000);
     }
 
@@ -98,20 +102,16 @@ public class AddCategoryScreen extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
-        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, 0xFF333333);
-        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, 0xFFFFAA00);
+        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, T.popupBg);
+        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, T.accentStripe);
         super.render(g, mx, my, pt);
 
-        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, panelTop + (int) Math.round(8 * sf), panelW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, panelTop + (int) Math.round(8 * sf), panelW - 10, T.textTitle);
 
         int lx = panelLeft + (int) Math.round(15 * sf);
-        FontUtil.drawAutoFitText(g, font, "名称:", lx, labelY, nameBoxW, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "名称:", lx, labelY, nameBoxW, T.textPrimary);
 
-        int col = nameBox.isFocused() ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(lx + 2, nameBoxY, lx + nameBoxW - 2, nameBoxY + 1, col);
-        g.fill(lx + 2, nameBoxY + boxH - 1, lx + nameBoxW - 2, nameBoxY + boxH, col);
-        g.fill(lx, nameBoxY + 2, lx + 1, nameBoxY + boxH - 2, col);
-        g.fill(lx + nameBoxW - 1, nameBoxY + 2, lx + nameBoxW, nameBoxY + boxH - 2, col);
+        GuiDraw.inputBox(g, lx, nameBoxY, nameBoxW, boxH, nameBox.isFocused());
     }
 
     @Override

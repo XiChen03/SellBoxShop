@@ -3,6 +3,7 @@ package com.sellbox.mod.shop;
 import com.sellbox.mod.SellBoxMod;
 import com.sellbox.mod.config.SellBoxConfig;
 import com.sellbox.mod.integration.VSSIntegration;
+import com.sellbox.mod.integration.VaultIntegration;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
@@ -25,6 +26,11 @@ public class SellBoxEconomy {
         return VSSIntegration.isLoaded() && SellBoxConfig.isVssCurrencyEnabled();
     }
 
+    /** Vault 经济：只有在混合端探测到 Economy 提供者、且配置开关打开时才接管 */
+    private static boolean isVaultEnabled() {
+        return SellBoxConfig.isVaultCurrencyEnabled() && VaultIntegration.isEconomyReady();
+    }
+
     public static void init(Path configDir) {
         balanceFile = configDir.resolve("SellBox").resolve("sellbox_economy.dat");
         load();
@@ -36,6 +42,9 @@ public class SellBoxEconomy {
     }
 
     public static int getBalance(ServerPlayer player) {
+        if (isVaultEnabled()) {
+            return VaultIntegration.getBalance(player);
+        }
         if (isVssEnabled()) {
             return VSSIntegration.getMoney(player);
         }
@@ -48,6 +57,10 @@ public class SellBoxEconomy {
 
     public static void addBalance(ServerPlayer player, int amount) {
         if (amount <= 0) return;
+        if (isVaultEnabled()) {
+            VaultIntegration.addBalance(player, amount);
+            return;
+        }
         if (isVssEnabled()) {
             VSSIntegration.addMoney(player, amount);
             return;
@@ -59,6 +72,9 @@ public class SellBoxEconomy {
 
     public static boolean deductBalance(ServerPlayer player, int amount) {
         if (amount <= 0) return true;
+        if (isVaultEnabled()) {
+            return VaultIntegration.deductBalance(player, amount);
+        }
         if (isVssEnabled()) {
             VSSIntegration.removeMoney(player, amount);
             return true;
@@ -83,6 +99,10 @@ public class SellBoxEconomy {
 
     public static void setBalance(ServerPlayer player, int amount) {
         if (amount < 0) amount = 0;
+        if (isVaultEnabled()) {
+            VaultIntegration.setBalance(player, amount);
+            return;
+        }
         if (isVssEnabled()) {
             VSSIntegration.setMoney(player, amount);
             return;

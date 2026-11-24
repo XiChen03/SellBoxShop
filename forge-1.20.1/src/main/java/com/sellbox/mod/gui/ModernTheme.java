@@ -1,163 +1,182 @@
 package com.sellbox.mod.gui;
 
 /**
- * "现代" 主题 - 全新像素化半透明风格
+ * "现代"主题 —— 参照 SDMShop 的样式。
+ * <p>
+ * 配色不是拍脑袋定的，而是从参考截图<b>反解</b>出来的：
+ * <pre>
+ *   参考图纯天空        #85B0FF
+ *   面板覆盖天空处      #455980   →  按 A=0.75 反解得面板原色 #2E3C56
+ *   左栏覆盖天空处      #5B6980   →  在面板之上再提白约 6~8%
+ *   格子覆盖天空处      #2D3B55   →  在面板之上再叠 50% 的 #161D2A
+ *   搜索框              #212C40
+ *   分类药丸 未选/选中  #313E55 / #7E8CA6
+ * </pre>
+ * 视觉要点：<b>唯一一层半透明蓝灰底板</b>，左栏在它上面提亮，格子/搜索框/药丸在它上面压暗，
+ * 大圆角、无描边、文字以灰白为主。
  */
 public class ModernTheme extends GuiTheme {
 
     public ModernTheme() {
         // ════════════════════════════════════════════
-        //  背景遮罩
+        //  背景 / 面板
         // ════════════════════════════════════════════
-        screenBackground     = 0x80000000;   // 半透明黑色蒙版
+        screenBackground     = 0x40000000;   // 淡蒙版：把世界压暗一档，面板边界才立得住
+        mainPanelBg          = 0xE6425479;   // 唯一底板 - 90% 不透明（叠在淡蒙版上≈#455980，即参考图色）
+        leftPanelBg          = 0x1FFFFFFF;   // 左栏 - 在底板之上提白 12%（合成 #5B6D8F ≈ 参考图 #5B6980）
+        headerBandBg         = 0x00000000;   // 顶部与主体同色（参考图实测如此）
+        popupBg              = 0xFA37456A;   // 弹窗 - 比面板略深一档，层次分明
+        accentStripe         = 0xFF8FB7FF;
+        panelDivider         = 0x33A8C4F0;   // 左右分栏竖线 - 浅蓝，不抢视线
+        separatorLine        = 0x33FFFFFF;
+        panelBorder          = 0x00000000;
+        popupBorder          = 0x33FFFFFF;
+        scrim                = 0xB3000000;
 
         // ════════════════════════════════════════════
-        //  面板背景 (深蓝灰色)
+        //  按钮 - 圆角、无描边
         // ════════════════════════════════════════════
-        mainPanelBg          = 0xE61A1F2E;   // 主面板 - 深蓝灰 90%不透明
-        leftPanelBg          = 0xE6141828;   // 左侧栏 - 更深的蓝灰
-        popupBg              = 0xF01E2236;   // 弹窗 - 深蓝灰 94%不透明
-        accentStripe         = 0xFF4A90D9;   // 强调条 - 亮蓝色
-        panelDivider         = 0xFF2A3050;   // 面板分割线
-        separatorLine        = 0xFF3A4060;   // 普通分割线
+        btnBorder            = 0x00000000;
+        btnBgNormal          = 0xE62F3B50;
+        btnBgHovered         = 0xE64E6288;
+        btnText              = 0xFFE6ECF7;
+        btnBgGreenNormal     = 0xE62E4A44;
+        btnBgGreenHovered    = 0xE63E6E60;
 
         // ════════════════════════════════════════════
-        //  按钮 (现代风格)
+        //  分类 - 圆角药丸
         // ════════════════════════════════════════════
-        btnBorder            = 0xFF4A90D9;   // 蓝色边框
-        btnBgNormal          = 0xCC2A3050;   // 深蓝灰背景 80%不透明
-        btnBgHovered         = 0x664A90D9;   // 蓝色半透明悬浮
-        btnText              = 0xFFFFFF;     // 白色文字
-        btnBgGreenNormal     = 0xCC1E3A2A;   // 绿色按钮底色
-        btnBgGreenHovered    = 0x664CAF50;   // 绿色悬浮
+        catBorder            = 0x00000000;
+        catSelectedFill      = 0xFF7E8CA6;
+        catHoveredFill       = 0xCC455878;
+        catPillBg            = 0xE62F3B50;
+        catPillSelectedBg    = 0xFF7E8CA6;
+        drawCategoryBorder   = false;
+        catText              = 0xFFE2E8F2;
+        catTitleText         = 0xFFF2F5FA;
+        myShopLabel          = 0xFF8FB7FF;
 
         // ════════════════════════════════════════════
-        //  分类导航栏
+        //  物品网格 - 独立圆角块（在底板之上压暗）
         // ════════════════════════════════════════════
-        catBorder            = 0xFF4A90D9;   // 蓝色边框
-        catSelectedFill      = 0x444A90D9;   // 选中 - 蓝色半透明
-        catHoveredFill       = 0x22FFFFFF;   // 悬浮 - 白色微透
-        catText              = 0xFFB0B8C8;   // 未选中文字 - 浅蓝灰
-        catTitleText         = 0xFFFFFFFF;   // 标题 - 纯白
-        myShopLabel          = 0xFF4CAF50;   // "我的商店" - 绿色
+        cellBg               = 0x80182334;   // 格子 - 在底板上压暗（合成≈#2D3B55，即参考图格底色）
+        drawCellBorder       = false;
+        cellBorder           = 0x00000000;
+        cellSelectedFill     = 0x668FB7FF;
+        cellHoveredFill      = 0x33E6ECF7;
+        cellInInventory      = 0xFF8FB7FF;
+        addSlotBorder        = 0x00000000;
+        addSlotText          = 0xFF8FE3B0;
+        addSlotBgNormal      = 0x80161D2A;
+        addSlotBgHovered     = 0x80323F5C;
 
         // ════════════════════════════════════════════
-        //  物品网格
+        //  文字
         // ════════════════════════════════════════════
-        cellBorder           = 0xFF3A4060;   // 格子边框 - 深蓝灰
-        cellSelectedFill     = 0x444A90D9;   // 选中 - 蓝色
-        cellHoveredFill      = 0x33FFFFFF;   // 悬浮 - 白色微透
-        cellInInventory      = 0xFF4CAF50;   // 库存标记 - 绿色
-        addSlotBorder        = 0xFF3A4060;   // 添加槽边框
-        addSlotText          = 0xFF4CAF50;   // "+" 号 - 绿色
-        addSlotBgNormal      = 0xCC1E2236;   // 添加槽背景
-        addSlotBgHovered     = 0x664CAF50;   // 添加槽悬浮 - 绿色
+        textPrimary          = 0xFFF2F5FA;
+        textSecondary        = 0xFFDCE4F0;
+        textMuted            = 0xFFB4C0D4;
+        textHint             = 0xFF9AA8C0;
+        textDisabled         = 0xFF8896AE;
+        textTitle            = 0xFFF2F5FA;
+        textPrice            = 0xFFDCE4F0;
+        textTotal            = 0xFFE8C878;
+        textTradeType        = 0xFFDCE4F0;
+        textCategoryName     = 0xFFE2E8F2;
+        textModeLabel        = 0xFF8FB7FF;
+        textMatchMode        = 0xFFC3A6E6;
+        textLocked           = 0xFF8FE3B0;
+        textInInventory      = 0xFF8FB7FF;
+        textError            = 0xFFFF8A8A;
 
         // ════════════════════════════════════════════
-        //  文字颜色
+        //  特殊槽位
         // ════════════════════════════════════════════
-        textPrimary          = 0xFFFFFFFF;   // 主要文字 - 纯白
-        textSecondary        = 0xFFB0B8C8;   // 次要文字 - 浅蓝灰
-        textMuted            = 0xFF7080A0;   // 弱化文字 - 暗蓝灰
-        textHint             = 0xFF5A6A8A;   // 提示文字 - 更暗
-        textDisabled         = 0xFF4A5A7A;   // 禁用文字
-        textTitle            = 0xFFFFFFFF;   // 标题 - 纯白
-        textPrice            = 0xFF4CAF50;   // 价格 - 绿色
-        textTotal            = 0xFFFFC107;   // 总价 - 橙黄
-        textTradeType        = 0xFF90CAF9;   // 交易类型 - 浅蓝
-        textCategoryName     = 0xFFB0B8C8;   // 分类名 - 浅蓝灰
-        textModeLabel        = 0xFF90CAF9;   // 模式标签 - 浅蓝
-        textMatchMode        = 0xFFCE93D8;   // 匹配模式 - 淡紫
-        textLocked           = 0xFF4CAF50;   // 锁定 - 绿色
-        textInInventory      = 0xFF81C784;   // 库存中 - 浅绿
-        textError            = 0xFFEF5350;   // 错误 - 红色
+        slotBagBorder        = 0xFFE8C878;
+        slotReceiptBorder    = 0xFFC3A6E6;
+        slotInnerFill        = 0xFF161D2A;
+        slotLabelText        = 0xFFDCE4F0;
 
         // ════════════════════════════════════════════
-        //  特殊槽位边框
+        //  输入框 - 深色胶囊
         // ════════════════════════════════════════════
-        slotBagBorder        = 0xFFFFC107;   // 钱袋 - 橙黄
-        slotReceiptBorder    = 0xFFCE93D8;   // 收据 - 淡紫
-        slotInnerFill        = 0xFF1E2236;   // 槽位内部 - 深蓝灰
-        slotLabelText        = 0xFFB0B8C8;   // 槽位标签 - 浅蓝灰
-
-        // ════════════════════════════════════════════
-        //  输入框
-        // ════════════════════════════════════════════
-        inputBorderFocused   = 0xFF4A90D9;   // 聚焦 - 蓝色
-        inputBorderUnfocused = 0xFF3A4060;   // 未聚焦 - 深蓝灰
+        inputBorderFocused   = 0x00000000;
+        inputBorderUnfocused = 0x00000000;
+        searchBg             = 0xE6182130;
+        inputBg              = 0xE6182130;   // 与搜索框同一底色，输入框在任何背景上都可见
+        searchText           = 0xFFF2F5FA;
+        searchCursor         = 0xFFFFFFFF;
 
         // ════════════════════════════════════════════
         //  滚动条
         // ════════════════════════════════════════════
-        scrollbarTrack       = 0x801E2236;   // 轨道 - 深蓝灰半透明
-        scrollbarThumb       = 0xCC4A90D9;   // 滑块 - 蓝色
+        scrollbarTrack       = 0x33202C42;
+        scrollbarThumb       = 0xCC7E8CA6;
 
         // ════════════════════════════════════════════
-        //  右键菜单
+        //  右键菜单 / 列表行
         // ════════════════════════════════════════════
-        ctxMenuBg            = 0xF01E2236;   // 菜单背景 - 深蓝灰
-        ctxMenuBorder        = 0xFF4A90D9;   // 菜单边框 - 蓝色
-        ctxMenuItemHover     = 0x444A90D9;   // 菜单项悬浮 - 蓝色
+        ctxMenuBg            = 0xFA2E3C56;
+        ctxMenuBorder        = 0x33FFFFFF;
+        ctxMenuItemHover     = 0x448FB7FF;
+        listRowBg            = 0x00000000;
+        listRowHover         = 0x33E6ECF7;
+        listRowSelected      = 0x668FB7FF;
 
         // ════════════════════════════════════════════
         //  余额 / 库存
         // ════════════════════════════════════════════
-        balanceBorder        = 0xFF4A90D9;   // 余额边框 - 蓝色
-        balanceText          = 0xFFFFC107;   // 余额文字 - 橙黄
-        stockInColor         = 0x504CAF50;   // 有库存 - 绿色半透
-        stockOutColor        = 0x50EF5350;   // 无库存 - 红色半透
-        searchText           = 0xFFFFFFFF;   // 搜索文字 - 白色
-        searchCursor         = 0xFFFFFFFF;   // 光标 - 白色
+        balanceBorder        = 0x00000000;
+        balanceBg            = 0x80182334;   // 余额卡底色，与物品格子同一压暗档
+        balanceText          = 0xFFF2F5FA;
+        stockInColor         = 0x508FE3B0;
+        stockOutColor        = 0x50FF8A8A;
 
         // ════════════════════════════════════════════
         //  NBT / 信息面板
         // ════════════════════════════════════════════
-        nbtBoxOuter          = 0xFF0E1018;   // NBT框外层
-        nbtBoxInner          = 0xFF1E2236;   // NBT框内层
-        infoPanelBg          = 0x661E2236;   // 信息面板
-        itemListBg           = 0xE6141828;   // 物品列表背景
+        nbtBoxOuter          = 0xFF101A2A;
+        nbtBoxInner          = 0xFF161D2A;
+        infoPanelBg          = 0x662E3C56;
+        itemListBg           = 0xE82E3C56;
 
         // ════════════════════════════════════════════
-        //  严格匹配按钮
+        //  严格匹配 / 以物易物
         // ════════════════════════════════════════════
-        strictMatchOn        = 0x664CAF50;   // 开启 - 绿色
-        strictMatchOff       = 0x443A4060;   // 关闭 - 深蓝灰
-
-        // ════════════════════════════════════════════
-        //  以物易物
-        // ════════════════════════════════════════════
-        barterLockedBorder   = 0xFF4CAF50;   // 锁定边框 - 绿色
-        barterDisabledBorder = 0xFF4A5A7A;   // 禁用边框
+        strictMatchOn        = 0x668FE3B0;
+        strictMatchOff       = 0x33FFFFFF;
+        barterLockedBorder   = 0xFF8FE3B0;
+        barterDisabledBorder = 0xFF8896AE;
 
         // ════════════════════════════════════════════
         //  任务选择器
         // ════════════════════════════════════════════
-        questGroupBg         = 0xE61E2236;   // 任务组背景
-        questGroupHover      = 0x444A90D9;   // 任务组悬浮 - 蓝色
-        questChapterBg       = 0xE61A1E30;   // 章节背景
-        questChapterHover    = 0x444A90D9;   // 章节悬浮
-        questItemHover       = 0x444A90D9;   // 任务项悬浮
+        questGroupBg         = 0xE62E3C56;
+        questGroupHover      = 0x448FB7FF;
+        questChapterBg       = 0xE62A3450;
+        questChapterHover    = 0x448FB7FF;
+        questItemHover       = 0x448FB7FF;
 
         // ════════════════════════════════════════════
         //  字体缩放
         // ════════════════════════════════════════════
-        titleFontScale       = 1.2f;
+        titleFontScale       = 1.15f;
         tradeTypeScale       = 0.8f;
-        qtyTextScale         = 0.7f;
+        qtyTextScale         = 0.6f;
 
         // ════════════════════════════════════════════
         //  布局基准
         // ════════════════════════════════════════════
         basePanelWidth       = 440;
         basePanelHeight      = 280;
-        baseLeftPanelWidth   = 110;
-        baseCategoryHeight   = 28;
+        baseLeftPanelWidth   = 104;
+        baseCategoryHeight   = 18;
         gridCols             = 8;
         gridRows             = 4;
-        baseGridSpacingX     = 50;
-        baseGridSpacingY     = 56;
+        baseGridSpacingX     = 46;
+        baseGridSpacingY     = 52;
         scrollbarWidth       = 4;
         cellGap              = 3;
-        cornerRadius         = 4;
+        cornerRadius         = 8;
     }
 }

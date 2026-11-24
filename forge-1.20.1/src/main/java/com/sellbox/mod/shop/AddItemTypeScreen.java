@@ -23,7 +23,7 @@ public class AddItemTypeScreen extends Screen {
         return false;
     }
 
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x00000000);
     }
 

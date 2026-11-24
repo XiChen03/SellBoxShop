@@ -46,6 +46,8 @@ tasks.named('jar', Jar).configure {
 
 tasks.register('copyJarToNutstore', Copy) {
     dependsOn jar
+    // 换机器/换用户时这个目录可能不存在；不要因此让整个 build 失败
+    onlyIf { file('C:/Users/Administrator/Desktop/坚果云').exists() }
     from tasks.named('jar').map { it.archiveFile }
     into 'C:/Users/Administrator/Desktop/坚果云'
 }
@@ -160,6 +162,9 @@ dependencies {
 // When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.
 // See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
 tasks.withType(ProcessResources).configureEach {
+    // 源码是 UTF-8；不显式指定的话 Groovy 的 expand 会用平台默认编码（中文 Windows 上是 GBK），
+    // 把中文注释读成乱码，产出非法 UTF-8 的 neoforge.mods.toml，游戏加载时报 MalformedInputException
+    filteringCharset = 'UTF-8'
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,

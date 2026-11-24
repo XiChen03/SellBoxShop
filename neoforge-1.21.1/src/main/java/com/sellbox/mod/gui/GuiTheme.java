@@ -3,9 +3,10 @@ package com.sellbox.mod.gui;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.sellbox.mod.SellBoxMod;
-import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,14 +14,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 统一 GUI 主题配置 - 所有商店/市场 GUI 颜色集中管理
- * 通过 {@link #current} 获取当前主题，运行时可切换
+ * 统一 GUI 主题配置 - 所有商店/市场 GUI 颜色集中管理。
+ * <p>
+ * 关键设计：{@link #current} 的<b>对象身份永远不变</b>，切换主题时只把新配色的字段值
+ * 抄进这个实例（{@link #applyFieldsFrom}）。界面在构造时缓存 `GuiTheme.get()`，
+ * 因此切换后已打开的界面会立即变色，无需重开。
  */
 public class GuiTheme {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static GuiTheme current = new GuiTheme();
+
+    /** 全局唯一实例，身份稳定（切勿整体替换，否则各处缓存的引用会变旧） */
+    private static final GuiTheme current = new GuiTheme();
+
     private static String currentName = "default";
     private static final Map<String, ThemeFactory> registry = new LinkedHashMap<>();
+    private static Path configPath;
 
     static {
         registry.put("default", ThemePresets::dark);
@@ -35,47 +43,91 @@ public class GuiTheme {
     public static String getCurrentName() { return currentName; }
     public static Map<String, ThemeFactory> getRegistry() { return registry; }
 
-    public static void set(GuiTheme theme) { current = theme; }
+    /** 该主题的人工可读名（用于按钮/提示） */
+    public static String displayName(String id) {
+        return switch (id) {
+            case "default" -> "默认深色";
+            case "modern" -> "现代";
+            case "light" -> "浅色";
+            case "green" -> "护眼绿";
+            case "purple" -> "暗紫";
+            case "orange" -> "暖橙";
+            default -> id;
+        };
+    }
 
-    public static void setByName(String name) {
-        ThemeFactory factory = registry.get(name.toLowerCase());
-        if (factory != null) {
-            current = factory.create();
-            currentName = name.toLowerCase();
-            save();
+    public static String getCurrentDisplayName() { return displayName(currentName); }
+
+    /**
+     * 按名字切换主题。切换成功后立即写盘，并就地刷新 {@link #current}。
+     *
+     * @return 名字不存在时返回 false
+     */
+    public static boolean setByName(String name) {
+        if (name == null) return false;
+        String key = name.toLowerCase();
+        ThemeFactory factory = registry.get(key);
+        if (factory == null) return false;
+        applyFieldsFrom(factory.create());
+        currentName = key;
+        save();
+        return true;
+    }
+
+    /** 就地覆盖：只复制实例字段，保持对象身份 */
+    private static void applyFieldsFrom(GuiTheme source) {
+        if (source == null || source == current) return;
+        for (Field f : GuiTheme.class.getFields()) {
+            int mod = f.getModifiers();
+            if (Modifier.isStatic(mod) || Modifier.isFinal(mod)) continue;
+            Class<?> type = f.getType();
+            if (type != int.class && type != float.class && type != boolean.class) continue;
+            try {
+                f.set(current, f.get(source));
+            } catch (IllegalAccessException e) {
+                SellBoxMod.LOGGER.error("Failed to copy GUI theme field {}", f.getName(), e);
+            }
         }
     }
 
     // ════════════════════════════════════════════
     //  持久化
     // ════════════════════════════════════════════
+    public static void init(Path configDir) {
+        configPath = configDir.resolve("SellBox").resolve("gui_theme.json");
+        load();
+    }
+
     private static Path getConfigPath() {
-        return FMLPaths.CONFIGDIR.get().resolve("SellBox").resolve("gui_theme.json");
+        return configPath;
     }
 
     public static void load() {
         Path path = getConfigPath();
+        if (path == null) return;
         if (!Files.exists(path)) {
             save();
             return;
         }
         try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            Map<String, String> data = GSON.fromJson(reader, Map.class);
-            if (data != null && data.containsKey("theme")) {
-                String name = data.get("theme");
-                ThemeFactory factory = registry.get(name);
+            Map<?, ?> data = GSON.fromJson(reader, Map.class);
+            if (data != null && data.get("theme") instanceof String name) {
+                ThemeFactory factory = registry.get(name.toLowerCase());
                 if (factory != null) {
-                    current = factory.create();
-                    currentName = name;
+                    applyFieldsFrom(factory.create());
+                    currentName = name.toLowerCase();
+                } else {
+                    SellBoxMod.LOGGER.warn("Unknown GUI theme '{}' in {}, keeping default", name, path);
                 }
             }
         } catch (Exception e) {
-            SellBoxMod.LOGGER.error("Failed to load GUI theme", e);
+            SellBoxMod.LOGGER.error("Failed to load GUI theme from {}", path, e);
         }
     }
 
     public static void save() {
         Path path = getConfigPath();
+        if (path == null) return;
         try {
             Files.createDirectories(path.getParent());
             Map<String, String> data = new LinkedHashMap<>();
@@ -103,6 +155,20 @@ public class GuiTheme {
     public int accentStripe       = 0xFFFFAA00;
     public int panelDivider       = 0xFF444444;
     public int separatorLine      = 0xFF555555;
+    /** 面板外框（0 = 不画边框） */
+    public int panelBorder        = 0x00000000;
+    /** 左侧栏顶部标题条底色（0 = 不画，与左栏同色） */
+    public int headerBandBg       = 0x00000000;
+    /** 弹窗/子界面外框（0 = 不画） */
+    public int popupBorder        = 0x00000000;
+    /** 弹窗全屏遮罩底色（0 = 不压暗背景） */
+    public int scrim              = 0xCC000000;
+    /** 列表行底色（0 = 不填充） */
+    public int listRowBg          = 0x00000000;
+    /** 列表行悬浮底色（0 = 不填充） */
+    public int listRowHover       = 0x22FFFFFF;
+    /** 列表行选中底色（0 = 不填充） */
+    public int listRowSelected    = 0x444488FF;
 
     // ════════════════════════════════════════════
     //  按钮 (ShopButton)
@@ -120,9 +186,15 @@ public class GuiTheme {
     public int catBorder          = 0xFF4488FF;
     public int catSelectedFill    = 0x444488FF;
     public int catHoveredFill     = 0x22FFFFFF;
+    /** 分类条目常态填充（0 = 不填充，只画边框） */
+    public int catPillBg          = 0x00000000;
+    /** 分类条目选中填充（0 = 退化为 catSelectedFill） */
+    public int catPillSelectedBg  = 0x00000000;
     public int catText            = 0x88CCFF;
     public int catTitleText       = 0xFFAA00;
     public int myShopLabel        = 0xFFFFAA00;
+    /** 是否绘制分类条目边框（false = 纯色块风格） */
+    public boolean drawCategoryBorder = true;
 
     // ════════════════════════════════════════════
     //  物品网格
@@ -130,11 +202,15 @@ public class GuiTheme {
     public int cellBorder         = 0xFF444444;
     public int cellSelectedFill   = 0x404488FF;
     public int cellHoveredFill    = 0x30FFFFFF;
+    /** 格子常态底色（0 = 透明，只画边框） */
+    public int cellBg             = 0x00000000;
     public int cellInInventory    = 0x88FFAA00;
     public int addSlotBorder      = 0x66444444;
     public int addSlotText        = 0x88FF88;
     public int addSlotBgNormal    = 0x88333333;
     public int addSlotBgHovered   = 0xAA44AA44;
+    /** 是否绘制格子边框（false = 纯色块风格） */
+    public boolean drawCellBorder = true;
 
     // ════════════════════════════════════════════
     //  文字颜色
@@ -168,6 +244,10 @@ public class GuiTheme {
     // ════════════════════════════════════════════
     public int inputBorderFocused    = 0x55FFFFFF;
     public int inputBorderUnfocused  = 0x55AAAAAA;
+    /** 搜索框底色（0 = 不填充，只画边框） */
+    public int searchBg              = 0x00000000;
+    /** 普通输入框底色；0 表示不铺底色（仅靠边框区分） */
+    public int inputBg               = 0x00000000;
 
     // ════════════════════════════════════════════
     //  滚动条
@@ -186,6 +266,8 @@ public class GuiTheme {
     //  库存 / 余额
     // ════════════════════════════════════════════
     public int balanceBorder      = 0x55FFD700;
+    /** 余额区底色；0 表示不铺底色（经典主题沿用纯边框） */
+    public int balanceBg          = 0x00000000;
     public int balanceText        = 0xFFD700;
     public int stockInColor       = 0x5044FF44;
     public int stockOutColor      = 0x50FF4444;
@@ -224,6 +306,9 @@ public class GuiTheme {
     // ════════════════════════════════════════════
     //  字体缩放
     // ════════════════════════════════════════════
+    /** 文字是否带投影。浅色主题必须关掉，否则深色字 + 白色糊影会糊成一团 */
+    public boolean textShadow     = true;
+
     public float titleFontScale   = 1.3f;
     public float tradeTypeScale  = 0.85f;
     public float qtyTextScale    = 0.6f;
@@ -235,7 +320,7 @@ public class GuiTheme {
     public int basePanelHeight    = 260;
     public int baseLeftPanelWidth = 100;
     public int baseCategoryHeight = 14;
-    public int gridCols           = 6;
+    public int gridCols           = 8;
     public int gridRows           = 4;
     public int baseGridSpacingX   = 44;
     public int baseGridSpacingY   = 48;

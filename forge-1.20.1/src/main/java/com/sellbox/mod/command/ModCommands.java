@@ -3,9 +3,11 @@ package com.sellbox.mod.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.sellbox.mod.SellBoxMod;
 import com.sellbox.mod.config.SellBoxConfig;
 import com.sellbox.mod.integration.SDMShopIntegration;
+import com.sellbox.mod.integration.VSSIntegration;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.playershop.PlayerShopBlacklist;
 import com.sellbox.mod.playershop.PlayerShopConfig;
@@ -42,6 +44,9 @@ public class ModCommands {
         {"editpricing", "打开物品定价GUI", "2", ""},
         {"adminshop edit", "切换管理员商店编辑模式", "2", "shop"},
         {"adminshop <true/false>", "SDMShop经济下启用/禁用管理员商店", "2", "sdm"},
+        {"extras true/false", "扩展功能总开关（默认开启）", "2", ""},
+        {"extras admin on/off", "扩展面板管理员模式开关", "2", ""},
+        {"extras", "扩展模块管理（兑换表/兑换码/邮件）", "2", ""},
         {"eco give <player> <amount>", "给予玩家金钱", "2", ""},
         {"eco set <player> <amount>", "设置玩家金钱", "2", ""},
         {"SDMShop <true/false>", "切换SDMShop经济(true)或内置经济(false)", "2", ""},
@@ -52,6 +57,10 @@ public class ModCommands {
         {"blacklist remove <item>", "从黑名单移除物品", "2", ""},
         {"blacklist list", "查看黑名单列表", "2", ""},
         {"playershop edit", "切换玩家商店编辑模式", "2", ""},
+        {"theme [name]", "查看/切换GUI主题", "0", ""},
+        {"vault [true/false]", "查看/切换 Vault 经济（仅混合端）", "2", ""},
+        {"dustbin [index]", "打开扫地女仆垃圾箱（从1开始）", "0", ""},
+        {"ViScriptShop [true/false]", "查看/切换 VSS 经济", "2", ""},
     };
     private static final int PER_PAGE = 5;
 
@@ -62,14 +71,17 @@ public class ModCommands {
     private static void sendHelpPage(CommandSourceStack source, int page) {
         boolean isOp = source.hasPermission(2);
         boolean isSdmActive = SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled();
-        boolean shopAllowed = !isSdmActive || SellBoxConfig.isShopOverrideEnabled();
+        boolean isVssActive = VSSIntegration.isLoaded() && SellBoxConfig.isVssCurrencyEnabled();
+        // 外部经济接管时管理员商店默认禁用（可用 adminshop true 临时启用）
+        boolean externalEcoActive = isSdmActive || isVssActive;
+        boolean shopAllowed = !externalEcoActive || SellBoxConfig.isShopOverrideEnabled();
         java.util.List<String[]> visible = new java.util.ArrayList<>();
         for (String[] entry : HELP_DATA) {
             int needPerm = Integer.parseInt(entry[2]);
             if (!(isOp || needPerm <= 0)) continue;
             String tag = entry.length > 3 ? entry[3] : "";
             if ("shop".equals(tag) && !shopAllowed) continue;
-            if ("sdm".equals(tag) && !isSdmActive) continue;
+            if ("sdm".equals(tag) && !externalEcoActive) continue;
             visible.add(entry);
         }
 
@@ -198,10 +210,11 @@ public class ModCommands {
         boolean globalEditMode = ShopConfig.isEditMode();
         boolean sdm = SellBoxConfig.isSdmCurrencyEnabled();
         boolean override = SellBoxConfig.isShopOverrideEnabled();
+        boolean vss = SellBoxConfig.isVssCurrencyEnabled();
         for (var player : server.getPlayerList().getPlayers()) {
             boolean playerEdit = globalEditMode && player.hasPermissions(2);
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                    new ModNetwork.SyncShopConfigPacket(sdm, override, playerEdit));
+                    new ModNetwork.SyncShopConfigPacket(sdm, override, playerEdit, vss, SellBoxConfig.isExtrasEnabled()));
         }
     }
 
@@ -411,8 +424,10 @@ public class ModCommands {
                                 }))
                         .then(Commands.literal("open")
                                 .executes(ctx -> {
-                                    if (SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled() && !SellBoxConfig.isShopOverrideEnabled()) {
-                                        ctx.getSource().sendFailure(Component.literal("SDMShop经济模式下管理员商店已禁用，使用 /sellbox adminshop true 启用"));
+                                    if ((SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled()
+                                            || VSSIntegration.isLoaded() && SellBoxConfig.isVssCurrencyEnabled())
+                                            && !SellBoxConfig.isShopOverrideEnabled()) {
+                                        ctx.getSource().sendFailure(Component.literal("外部经济模式下管理员商店已禁用，使用 /sellbox adminshop true 启用"));
                                         return 0;
                                     }
                                     ServerPlayer player = ctx.getSource().getPlayerOrException();
@@ -423,8 +438,9 @@ public class ModCommands {
                         .then(Commands.argument("enabled", BoolArgumentType.bool())
                                 .requires(source -> source.hasPermission(2))
                                 .executes(ctx -> {
-                                    if (!(SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled())) {
-                                        ctx.getSource().sendFailure(Component.literal("该指令仅在使用SDMShop经济时可用"));
+                                    if (!(SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled()
+                                            || VSSIntegration.isLoaded() && SellBoxConfig.isVssCurrencyEnabled())) {
+                                        ctx.getSource().sendFailure(Component.literal("该指令仅在使用外部经济（SDMShop / ViScriptShop）时可用"));
                                         return 0;
                                     }
                                     boolean enabled = BoolArgumentType.getBool(ctx, "enabled");
@@ -434,77 +450,167 @@ public class ModCommands {
                                     return 1;
                                 })))
 
-                .then(Commands.literal("shoplist")
-                        .executes(ctx -> { sendShopList(ctx.getSource(), 1); return 1; })
-                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                .then(Commands.literal("extras")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(ctx -> {
+                            var src = ctx.getSource();
+                            src.sendSuccess(() -> Component.literal("\u00a7e=== 扩展模块 ==="), false);
+                            src.sendSuccess(() -> Component.literal("\u00a77兑换表条目: \u00a7f"
+                                    + com.sellbox.mod.extras.ExtrasConfigFile.getExchangeRates().size()), false);
+                            src.sendSuccess(() -> Component.literal("\u00a77兑换码数量: \u00a7f"
+                                    + com.sellbox.mod.extras.ExtrasConfigFile.getRedeemCodes().size()), false);
+                            src.sendSuccess(() -> Component.literal("\u00a77玩家数据条数: \u00a7f"
+                                    + com.sellbox.mod.extras.ExtrasManager.loadedCount()), false);
+                            src.sendSuccess(() -> Component.literal("\u00a77指令: /sellbox extras rate <物品> <价格> | rate remove <物品> | rate list | code create <码> [金币] | code remove <码> | code list | mail <玩家> <内容> | admin [on|off] | save"), false);
+                            return 1;
+                        })
+                        .then(Commands.literal("true").executes(ctx -> toggleExtras(ctx, true)))
+                        .then(Commands.literal("false").executes(ctx -> toggleExtras(ctx, false)))
+                        .then(Commands.literal("admin")
+                                .executes(ctx -> toggleAdmin(ctx, null))
+                                .then(Commands.literal("on").executes(ctx -> toggleAdmin(ctx, true)))
+                                .then(Commands.literal("off").executes(ctx -> toggleAdmin(ctx, false))))
+                        .then(Commands.literal("rate")
+                                .then(Commands.literal("list")
+                                        .executes(ctx -> {
+                                            var src = ctx.getSource();
+                                            var rates = com.sellbox.mod.extras.ExtrasConfigFile.getExchangeRates();
+                                            if (rates.isEmpty()) {
+                                                src.sendSuccess(() -> Component.literal("\u00a77兑换表为空"), false);
+                                                return 1;
+                                            }
+                                            src.sendSuccess(() -> Component.literal("\u00a7e=== 兑换表 ==="), false);
+                                            for (var e : rates.entrySet()) {
+                                                src.sendSuccess(() -> Component.literal("\u00a7f" + e.getKey()
+                                                        + " \u00a77= \u00a7a" + e.getValue() + " 金币"), false);
+                                            }
+                                            return 1;
+                                        }))
+                                .then(Commands.literal("remove")
+                                        .then(Commands.argument("item", StringArgumentType.string())
+                                                .executes(ctx -> {
+                                                    String item = StringArgumentType.getString(ctx, "item");
+                                                    com.sellbox.mod.extras.ExtrasConfigFile.removeRate(item);
+                                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                                            "\u00a7a已移除兑换项: " + item), true);
+                                                    return 1;
+                                                })))
+                                .then(Commands.argument("item", StringArgumentType.string())
+                                        .then(Commands.argument("value", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> {
+                                                    String item = StringArgumentType.getString(ctx, "item");
+                                                    int value = IntegerArgumentType.getInteger(ctx, "value");
+                                                    com.sellbox.mod.extras.ExtrasConfigFile.setRate(item, value);
+                                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                                            "\u00a7a已设置 " + item + " = " + value + " 金币/个"), true);
+                                                    return 1;
+                                                }))))
+                        .then(Commands.literal("code")
+                                .then(Commands.literal("list")
+                                        .executes(ctx -> {
+                                            var src = ctx.getSource();
+                                            var codes = com.sellbox.mod.extras.ExtrasConfigFile.getRedeemCodes();
+                                            if (codes.isEmpty()) {
+                                                src.sendSuccess(() -> Component.literal("\u00a77还没有兑换码"), false);
+                                                return 1;
+                                            }
+                                            src.sendSuccess(() -> Component.literal("\u00a7e=== 兑换码 ==="), false);
+                                            for (var c : codes.values()) {
+                                                String uses = c.maxUses < 0 ? "不限" : (c.uses + "/" + c.maxUses);
+                                                src.sendSuccess(() -> Component.literal("\u00a7f" + c.code
+                                                        + " \u00a77次数: \u00a7a" + uses
+                                                        + " \u00a77金币: \u00a7a" + c.money
+                                                        + " \u00a77已领: \u00a7a" + c.claimedBy.size()), false);
+                                            }
+                                            return 1;
+                                        }))
+                                .then(Commands.literal("remove")
+                                        .then(Commands.argument("code", StringArgumentType.string())
+                                                .executes(ctx -> {
+                                                    String code = StringArgumentType.getString(ctx, "code");
+                                                    com.sellbox.mod.extras.ExtrasConfigFile.removeCode(code);
+                                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                                            "\u00a7a已删除兑换码: " + code.toUpperCase()), true);
+                                                    return 1;
+                                                })))
+                                .then(Commands.literal("create")
+                                        .then(Commands.argument("code", StringArgumentType.string())
+                                                .executes(ctx -> createCode(ctx, StringArgumentType.getString(ctx, "code"), 0, -1))
+                                                .then(Commands.argument("money", IntegerArgumentType.integer(0))
+                                                        .executes(ctx -> createCode(ctx, StringArgumentType.getString(ctx, "code"),
+                                                                IntegerArgumentType.getInteger(ctx, "money"), -1))
+                                                        .then(Commands.argument("maxUses", IntegerArgumentType.integer(-1))
+                                                                .executes(ctx -> createCode(ctx, StringArgumentType.getString(ctx, "code"),
+                                                                        IntegerArgumentType.getInteger(ctx, "money"),
+                                                                        IntegerArgumentType.getInteger(ctx, "maxUses"))))))))
+                        .then(Commands.literal("mail")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("text", StringArgumentType.greedyString())
+                                                .executes(ctx -> {
+                                                    var target = EntityArgument.getPlayer(ctx, "player");
+                                                    String text = StringArgumentType.getString(ctx, "text");
+                                                    var data = com.sellbox.mod.extras.ExtrasManager.get(target.getUUID());
+                                                    var mail = new com.sellbox.mod.extras.ExtrasData.Mail();
+                                                    mail.title = "系统通知";
+                                                    mail.content = text;
+                                                    mail.kind = "admin";
+                                                    mail.sender = ctx.getSource().getTextName();
+                                                    data.addMail(mail);
+                                                    com.sellbox.mod.extras.ExtrasManager.markDirty();
+                                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                                            "\u00a7a已给 " + target.getName().getString() + " 发送邮件"), true);
+                                                    return 1;
+                                                }))))
+                        .then(Commands.literal("save")
                                 .executes(ctx -> {
-                                    int page = IntegerArgumentType.getInteger(ctx, "page");
-                                    sendShopList(ctx.getSource(), page);
+                                    com.sellbox.mod.extras.ExtrasConfigFile.save();
+                                    com.sellbox.mod.extras.ExtrasManager.save();
+                                    ctx.getSource().sendSuccess(() -> Component.literal("\u00a7a扩展数据已保存"), true);
                                     return 1;
                                 })))
 
-                .then(Commands.literal("reload")
+                .then(Commands.literal("vault")
                         .requires(source -> source.hasPermission(2))
                         .executes(ctx -> {
-                            SellBoxConfig.loadPricing();
-                            PlayerShopConfig.load();
-                            PlayerShopConfig.loadStats();
-                            ShopConfig.load();
-                            com.sellbox.mod.playershop.PlayerShopBlacklist.reload();
-                            ModNetwork.broadcastAllPrices(ctx.getSource().getServer());
-                            broadcastBlacklist(ctx.getSource().getServer());
-                            broadcastAdminEdit(ctx.getSource().getServer());
-                            ctx.getSource().sendSuccess(
-                                    () -> Component.literal("已重载所有配置"), true
-                            );
+                            var src = ctx.getSource();
+                            boolean loaded = com.sellbox.mod.integration.VaultIntegration.isLoaded();
+                            boolean ready = com.sellbox.mod.integration.VaultIntegration.isEconomyReady();
+                            src.sendSuccess(() -> Component.literal("\u00a7eVault: \u00a7f"
+                                    + (loaded ? "\u00a7a已探测到 Bukkit" : "\u00a7c未探测到 Bukkit（纯 Forge 端不支持）")), false);
+                            src.sendSuccess(() -> Component.literal("\u00a7eEconomy 提供者: \u00a7f"
+                                    + com.sellbox.mod.integration.VaultIntegration.getProviderName()
+                                    + (ready ? " \u00a7a(可用)" : " \u00a7c(不可用)")), false);
+                            src.sendSuccess(() -> Component.literal("\u00a7e当前开关: \u00a7f"
+                                    + (SellBoxConfig.isVaultCurrencyEnabled() ? "开启" : "关闭")
+                                    + " \u00a77（/sellbox vault <true|false> 切换）"), false);
                             return 1;
-                        }))
-
-                .then(Commands.literal("eco")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("give")
-                                .then(Commands.argument("player", EntityArgument.player())
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
-                                                .executes(ctx -> {
-                                                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
-                                                    int amount = IntegerArgumentType.getInteger(ctx, "amount");
-                                                    SellBoxEconomy.addBalance(target, amount);
-                                                    ModNetwork.sendBalanceToPlayer(target);
-                                                    ctx.getSource().sendSuccess(() -> Component.literal("已给予 " + target.getName().getString() + " " + SellBoxEconomy.formatMoneyStatic(amount)), true);
-                                                    return 1;
-                                                }))))
-                        .then(Commands.literal("set")
-                                .then(Commands.argument("player", EntityArgument.player())
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
-                                                .executes(ctx -> {
-                                                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
-                                                    int amount = IntegerArgumentType.getInteger(ctx, "amount");
-                                                    SellBoxEconomy.setBalance(target, amount);
-                                                    ModNetwork.sendBalanceToPlayer(target);
-                                                    ctx.getSource().sendSuccess(() -> Component.literal("已设置 " + target.getName().getString() + " 余额为 " + SellBoxEconomy.formatMoneyStatic(amount)), true);
-                                                    return 1;
-                                                })))))
-
-                .then(Commands.literal("SDMShop")
-                        .requires(source -> source.hasPermission(2))
+                        })
                         .then(Commands.argument("value", BoolArgumentType.bool())
                                 .executes(ctx -> {
                                     boolean value = BoolArgumentType.getBool(ctx, "value");
-                                    if (value && !SDMShopIntegration.isLoaded()) {
-                                        ctx.getSource().sendFailure(Component.literal("未安装SDMShop模组，无法切换到SDMShop经济系统"));
-                                        return 0;
-                                    }
-                                    SellBoxConfig.setSdmCurrencyEnabled(value);
                                     if (value) {
-                                        SellBoxConfig.setShopOverrideEnabled(false);
-                                    } else {
-                                        SellBoxConfig.setShopOverrideEnabled(true);
+                                        if (!com.sellbox.mod.integration.VaultIntegration.isLoaded()) {
+                                            ctx.getSource().sendFailure(Component.literal(
+                                                    "\u00a7c当前服务端没有 Bukkit/Vault（纯 Forge 端不支持）"));
+                                            return 0;
+                                        }
+                                        if (!com.sellbox.mod.integration.VaultIntegration.isEconomyReady()) {
+                                            ctx.getSource().sendFailure(Component.literal(
+                                                    "\u00a7c没找到 Vault 的 Economy 提供者，请确认服务端已装经济插件"));
+                                            return 0;
+                                        }
+                                        // 互斥：开 Vault 就关掉 SDM
+                                        SellBoxConfig.setSdmCurrencyEnabled(false);
                                     }
+                                    SellBoxConfig.setVaultCurrencyEnabled(value);
                                     var server = ctx.getSource().getServer();
                                     for (var p : server.getPlayerList().getPlayers()) {
                                         ModNetwork.sendBalanceToPlayer(p);
                                     }
-                                    ctx.getSource().sendSuccess(() -> Component.literal("SDMShop经济已" + (value ? "启用" : "禁用") + "，使用 " + (value ? "SDMShop" : "SellBox内置") + " 经济系统"), true);
+                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                            "\u00a7aVault 经济已" + (value ? "启用" : "禁用") + "，余额走 "
+                                                    + (value ? com.sellbox.mod.integration.VaultIntegration.getProviderName() : "SellBox内置")
+                                                    + " 经济系统"), true);
                                     broadcastShopConfig(server);
                                     return 1;
                                 })))
@@ -588,6 +694,179 @@ public class ModCommands {
                                     return 1;
                                 })))
 
+                .then(Commands.literal("shoplist")
+                        .executes(ctx -> { sendShopList(ctx.getSource(), 1); return 1; })
+                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                                .executes(ctx -> {
+                                    int page = IntegerArgumentType.getInteger(ctx, "page");
+                                    sendShopList(ctx.getSource(), page);
+                                    return 1;
+                                })))
+
+                .then(Commands.literal("dustbin")
+                        .executes(ctx -> {
+                            com.sellbox.mod.extras.ExtrasSweeper.openDustbin(
+                                    ctx.getSource().getPlayerOrException(), 0);
+                            return 1;
+                        })
+                        .then(Commands.argument("index", IntegerArgumentType.integer(1, 64))
+                                .executes(ctx -> {
+                                    com.sellbox.mod.extras.ExtrasSweeper.openDustbin(
+                                            ctx.getSource().getPlayerOrException(),
+                                            IntegerArgumentType.getInteger(ctx, "index") - 1);
+                                    return 1;
+                                })))
+
+                .then(Commands.literal("reload")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(ctx -> {
+                            SellBoxConfig.loadPricing();
+                            PlayerShopConfig.load();
+                            PlayerShopConfig.loadStats();
+                            ShopConfig.load();
+                            com.sellbox.mod.playershop.PlayerShopBlacklist.reload();
+                            ModNetwork.broadcastAllPrices(ctx.getSource().getServer());
+                            broadcastBlacklist(ctx.getSource().getServer());
+                            broadcastAdminEdit(ctx.getSource().getServer());
+                            ctx.getSource().sendSuccess(
+                                    () -> Component.literal("已重载所有配置"), true
+                            );
+                            return 1;
+                        }))
+
+                .then(Commands.literal("eco")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("give")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(ctx -> {
+                                                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+                                                    int amount = IntegerArgumentType.getInteger(ctx, "amount");
+                                                    SellBoxEconomy.addBalance(target, amount);
+                                                    ModNetwork.sendBalanceToPlayer(target);
+                                                    ctx.getSource().sendSuccess(() -> Component.literal("已给予 " + target.getName().getString() + " " + SellBoxEconomy.formatMoneyStatic(amount)), true);
+                                                    return 1;
+                                                }))))
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(ctx -> {
+                                                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+                                                    int amount = IntegerArgumentType.getInteger(ctx, "amount");
+                                                    SellBoxEconomy.setBalance(target, amount);
+                                                    ModNetwork.sendBalanceToPlayer(target);
+                                                    ctx.getSource().sendSuccess(() -> Component.literal("已设置 " + target.getName().getString() + " 余额为 " + SellBoxEconomy.formatMoneyStatic(amount)), true);
+                                                    return 1;
+                                                })))))
+
+                .then(Commands.literal("SDMShop")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(ctx -> {
+                            var src = ctx.getSource();
+                            boolean loaded = SDMShopIntegration.isLoaded();
+                            src.sendSuccess(() -> Component.literal("§eSDMShop: §f"
+                                    + (loaded ? "§a已探测" : "§c未探测到")), false);
+                            src.sendSuccess(() -> Component.literal("§eAPI 版本: §f"
+                                    + SDMShopIntegration.getApiVersion()), false);
+                            src.sendSuccess(() -> Component.literal("§e当前开关: §f"
+                                    + (SellBoxConfig.isSdmCurrencyEnabled() ? "开启" : "关闭")
+                                    + " §7（/sellbox SDMShop <true|false> 切换）"), false);
+                            return 1;
+                        })
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                                .executes(ctx -> {
+                                    boolean value = BoolArgumentType.getBool(ctx, "value");
+                                    if (value && !SDMShopIntegration.isLoaded()) {
+                                        ctx.getSource().sendFailure(Component.literal("未安装SDMShop模组，无法切换到SDMShop经济系统"));
+                                        return 0;
+                                    }
+                                    SellBoxConfig.setSdmCurrencyEnabled(value);
+                                    if (value) {
+                                        SellBoxConfig.setShopOverrideEnabled(false);
+                                    } else {
+                                        SellBoxConfig.setShopOverrideEnabled(true);
+                                    }
+                                    var server = ctx.getSource().getServer();
+                                    for (var p : server.getPlayerList().getPlayers()) {
+                                        ModNetwork.sendBalanceToPlayer(p);
+                                    }
+                                    ctx.getSource().sendSuccess(() -> Component.literal("SDMShop经济已" + (value ? "启用" : "禁用") + "，使用 " + (value ? "SDMShop" : "SellBox内置") + " 经济系统"), true);
+                                    broadcastShopConfig(server);
+                                    return 1;
+                                })))
+
+                .then(Commands.literal("ViScriptShop")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(ctx -> {
+                            var src = ctx.getSource();
+                            boolean loaded = VSSIntegration.isLoaded();
+                            src.sendSuccess(() -> Component.literal("\u00a7eViScriptShop: \u00a7f"
+                                    + (loaded ? "\u00a7a已探测" : "\u00a7c未探测到")), false);
+                            src.sendSuccess(() -> Component.literal("\u00a7eAPI 版本: \u00a7f"
+                                    + VSSIntegration.getApiVersion()), false);
+                            src.sendSuccess(() -> Component.literal("\u00a7e当前开关: \u00a7f"
+                                    + (SellBoxConfig.isVssCurrencyEnabled() ? "开启" : "关闭")
+                                    + " \u00a77（/sellbox ViScriptShop <true|false> 切换）"), false);
+                            return 1;
+                        })
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                                .executes(ctx -> {
+                                    boolean value = BoolArgumentType.getBool(ctx, "value");
+                                    if (value && !VSSIntegration.isLoaded()) {
+                                        ctx.getSource().sendFailure(Component.literal("\u00a7c未探测到 ViScriptShop，无法切换到 VSS 经济系统"));
+                                        return 0;
+                                    }
+                                    if (value) {
+                                        // VSS 与 SDM 互斥
+                                        SellBoxConfig.setSdmCurrencyEnabled(false);
+                                        SellBoxConfig.setShopOverrideEnabled(false);
+                                    } else {
+                                        SellBoxConfig.setShopOverrideEnabled(true);
+                                    }
+                                    SellBoxConfig.setVssCurrencyEnabled(value);
+                                    var server = ctx.getSource().getServer();
+                                    for (var p : server.getPlayerList().getPlayers()) {
+                                        ModNetwork.sendBalanceToPlayer(p);
+                                    }
+                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                            "\u00a7aVSS 经济已" + (value ? "启用" : "禁用") + "，使用 "
+                                                    + (value ? "ViScriptShop" : "SellBox内置") + " 经济系统"), true);
+                                    broadcastShopConfig(server);
+                                    return 1;
+                                })))
+
+                .then(Commands.literal("theme")
+                        .executes(ctx -> {
+                            var source = ctx.getSource();
+                            source.sendSuccess(() -> Component.literal("§e当前主题: §f"
+                                    + com.sellbox.mod.gui.GuiTheme.getCurrentDisplayName()
+                                    + " §7(" + com.sellbox.mod.gui.GuiTheme.getCurrentName() + ")"), false);
+                            source.sendSuccess(() -> Component.literal("§7可用主题: "
+                                    + String.join(", ", com.sellbox.mod.gui.GuiTheme.getRegistry().keySet())), false);
+                            source.sendSuccess(() -> Component.literal("§7使用 /sellbox theme <名称> 切换主题"), false);
+                            return 1;
+                        })
+                        .then(Commands.argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    for (String name : com.sellbox.mod.gui.GuiTheme.getRegistry().keySet()) {
+                                        builder.suggest(name);
+                                    }
+                                    return builder.buildFuture();
+                                })
+                                .executes(ctx -> {
+                                    String name = com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "name");
+                                    var registry = com.sellbox.mod.gui.GuiTheme.getRegistry();
+                                    if (!registry.containsKey(name.toLowerCase())) {
+                                        ctx.getSource().sendFailure(Component.literal("§c未知主题: " + name
+                                                + "，可用: " + String.join(", ", registry.keySet())));
+                                        return 0;
+                                    }
+                                    com.sellbox.mod.gui.GuiTheme.setByName(name.toLowerCase());
+                                    ctx.getSource().sendSuccess(() -> Component.literal("§a主题已切换为: §f"
+                                            + com.sellbox.mod.gui.GuiTheme.getCurrentDisplayName()), true);
+                                    return 1;
+                                })))
+
                 .then(Commands.literal("playershop")
                         .then(Commands.literal("edit")
                                 .requires(source -> source.hasPermission(2))
@@ -615,5 +894,44 @@ public class ModCommands {
         for (var player : server.getPlayerList().getPlayers()) {
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
         }
+    }
+
+    /** 开关整个扩展功能（默认开启） */
+    private static int toggleExtras(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean force) {
+        boolean on = force != null ? force : !SellBoxConfig.isExtrasEnabled();
+        SellBoxConfig.setExtrasEnabled(on);
+        broadcastShopConfig(ctx.getSource().getServer());
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
+                on ? "§a扩展功能已开启" : "§7扩展功能已关闭"), true);
+        return 1;
+    }
+
+    /** 开关扩展面板的管理员模式；不给值时按当前状态取反 */
+    private static int toggleAdmin(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean force) {
+        var src = ctx.getSource();
+        var player = src.getPlayer();
+        if (player == null) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("\u00a7c该指令只能由玩家执行"));
+            return 0;
+        }
+        boolean on = force != null ? force : !com.sellbox.mod.extras.ExtrasServer.isAdminMode(player);
+        com.sellbox.mod.extras.ExtrasServer.setAdminMode(player, on);
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal(
+                on ? "\u00a7a扩展面板管理员模式已开启" : "\u00a77扩展面板管理员模式已关闭"), false);
+        return 1;
+    }
+
+    private static int createCode(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+                                  String code, int money, int maxUses) {
+        var c = new com.sellbox.mod.extras.ExtrasConfigFile.RedeemCode();
+        c.code = code;
+        c.title = code;
+        c.money = money;
+        c.maxUses = maxUses;
+        com.sellbox.mod.extras.ExtrasConfigFile.putCode(c);
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
+                "\u00a7a已创建兑换码 " + c.code + "（金币 " + money
+                        + "，次数 " + (maxUses < 0 ? "不限" : maxUses) + "）"), true);
+        return 1;
     }
 }

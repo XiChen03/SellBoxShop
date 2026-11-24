@@ -31,6 +31,11 @@ import java.util.function.BiConsumer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public class ModPayloads {
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final ResourceLocation SYNC_ALL_PRICES_ID = ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "sync_all_prices");
     public static final ResourceLocation SYNC_BALANCE_ID = ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "sync_balance");
     public static final ResourceLocation REQUEST_BALANCE_ID = ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "request_balance");
@@ -42,6 +47,17 @@ public class ModPayloads {
     public static boolean clientShopOverride = false;
     public static boolean clientEditMode = false;
     public static boolean clientAdminEdit = false;
+    public static boolean clientExtrasEnabled = true;
+
+    /** 扩展模块：最近一次状态包（JSON） */
+    public static String clientExtrasState = "";
+    /** 扩展模块：最近一次响应包（JSON） */
+    public static String clientExtrasResponse = "";
+
+    /** 响应包是一次性的：界面处理完就清掉，避免重开界面时重播旧结果 */
+    public static void clearExtrasResponse() {
+        clientExtrasResponse = "";
+    }
 
     static final Map<ResourceLocation, BiConsumer<CustomPacketPayload, IPayloadContext>> clientHandlers = new HashMap<>();
 
@@ -50,7 +66,7 @@ public class ModPayloads {
     public record CloseScreenPayload(String messageKey) implements CustomPacketPayload {
         public static final Type<CloseScreenPayload> TYPE = new Type<>(CLOSE_SCREEN_ID);
         public static final StreamCodec<FriendlyByteBuf, CloseScreenPayload> CODEC = StreamCodec.of(
-                (buf, payload) -> buf.writeUtf(payload.messageKey),
+                (buf, payload) -> buf.writeUtf(safe(payload.messageKey)),
                 buf -> new CloseScreenPayload(buf.readUtf())
         );
         @Override
@@ -84,7 +100,7 @@ public class ModPayloads {
                 (buf, payload) -> {
                     buf.writeVarInt(payload.prices.size());
                     for (Map.Entry<String, Integer> entry : payload.prices.entrySet()) {
-                        buf.writeUtf(entry.getKey());
+                        buf.writeUtf(safe(entry.getKey()));
                         buf.writeVarInt(entry.getValue());
                     }
                 },
@@ -127,6 +143,26 @@ public class ModPayloads {
                 PricingPayload::handleDeleteNbtPrices);
         registrar.playToServer(PricingPayload.SetNbtPricesPayload.TYPE, PricingPayload.SetNbtPricesPayload.CODEC,
                 PricingPayload::handleSetNbtPrices);
+
+        // ── Extras（签到/邮箱/转账/兑换/兑换码/好友）──
+        registrar.playToServer(com.sellbox.mod.extras.net.ExtrasRequestPayload.TYPE,
+                com.sellbox.mod.extras.net.ExtrasRequestPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (context.player() instanceof net.minecraft.server.level.ServerPlayer sp) {
+                        com.sellbox.mod.extras.ExtrasServer.handleRequest(sp, payload.json());
+                    }
+                }));
+        registrar.playToClient(com.sellbox.mod.extras.net.ExtrasStatePayload.TYPE,
+                com.sellbox.mod.extras.net.ExtrasStatePayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> clientExtrasState = payload.json()));
+        registrar.playToClient(com.sellbox.mod.extras.net.ExtrasResponsePayload.TYPE,
+                com.sellbox.mod.extras.net.ExtrasResponsePayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> clientExtrasResponse = payload.json()));
+        // ── 扩展提醒（右下角 toast）──
+        registrar.playToClient(com.sellbox.mod.extras.net.ExtrasNoticePayload.TYPE,
+                com.sellbox.mod.extras.net.ExtrasNoticePayload.CODEC,
+                (payload, context) -> context.enqueueWork(
+                        () -> com.sellbox.mod.extras.client.ExtrasNoticeQueue.push(payload.json())));
 
         registrar.playToServer(ShopOpenPayload.TYPE, ShopOpenPayload.CODEC, (payload, context) -> ShopOpenPayload.handle(payload, context));
         registrar.playToServer(TradePayload.TYPE, TradePayload.CODEC, (payload, context) -> TradePayload.handle(payload, context));
@@ -196,6 +232,7 @@ public class ModPayloads {
                         clientShopOverride = p.shopOverrideEnabled();
                         clientEditMode = p.editMode();
                         clientAdminEdit = p.adminEditMode();
+                        clientExtrasEnabled = p.extrasEnabled();
                     });
                 });
 
@@ -244,12 +281,29 @@ public class ModPayloads {
         }
     }
 
+    public static void sendExtrasState(net.minecraft.server.level.ServerPlayer player, String json) {
+        PacketDistributor.sendToPlayer(player, new com.sellbox.mod.extras.net.ExtrasStatePayload(json));
+    }
+
+    public static void sendExtrasResponse(net.minecraft.server.level.ServerPlayer player, String json) {
+        PacketDistributor.sendToPlayer(player, new com.sellbox.mod.extras.net.ExtrasResponsePayload(json));
+    }
+
+    public static void sendExtrasNotice(net.minecraft.server.level.ServerPlayer player, String json) {
+        PacketDistributor.sendToPlayer(player, new com.sellbox.mod.extras.net.ExtrasNoticePayload(json));
+    }
+
+    public static void sendExtrasRequest(String json) {
+        PacketDistributor.sendToServer(new com.sellbox.mod.extras.net.ExtrasRequestPayload(json));
+    }
+
     public static void sendShopConfigToPlayer(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new SyncShopConfigPayload(
                 SellBoxConfig.isVssCurrencyEnabled(),
                 SellBoxConfig.isShopOverrideEnabled(),
                 com.sellbox.mod.shop.ShopConfig.isEditMode(),
-                com.sellbox.mod.playershop.PlayerShopConfig.isAdminEditMode()
+                com.sellbox.mod.playershop.PlayerShopConfig.isAdminEditMode(),
+                SellBoxConfig.isExtrasEnabled()
         ));
     }
 }

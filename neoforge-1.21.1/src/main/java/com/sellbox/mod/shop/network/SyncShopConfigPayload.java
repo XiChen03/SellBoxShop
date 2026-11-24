@@ -10,7 +10,8 @@ public record SyncShopConfigPayload(
         boolean vssCurrencyEnabled,
         boolean shopOverrideEnabled,
         boolean editMode,
-        boolean adminEditMode
+        boolean adminEditMode,
+        boolean extrasEnabled
 ) implements CustomPacketPayload {
     public static final Type<SyncShopConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "sync_shop_config"));
 
@@ -19,6 +20,7 @@ public record SyncShopConfigPayload(
             StreamCodec.of(FriendlyByteBuf::writeBoolean, FriendlyByteBuf::readBoolean), SyncShopConfigPayload::shopOverrideEnabled,
             StreamCodec.of(FriendlyByteBuf::writeBoolean, FriendlyByteBuf::readBoolean), SyncShopConfigPayload::editMode,
             StreamCodec.of(FriendlyByteBuf::writeBoolean, FriendlyByteBuf::readBoolean), SyncShopConfigPayload::adminEditMode,
+            StreamCodec.of(FriendlyByteBuf::writeBoolean, FriendlyByteBuf::readBoolean), SyncShopConfigPayload::extrasEnabled,
             SyncShopConfigPayload::new
     );
 

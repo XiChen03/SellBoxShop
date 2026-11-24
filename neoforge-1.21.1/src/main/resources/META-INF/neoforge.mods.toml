@@ -26,6 +26,8 @@ description="A SellBox mod with VSS support and market features"
 [[dependencies.${mod_id}]]
     modId="viscript_shop"
     type="optional"
+    # 兼容 1.1.x（int 货币）与 1.2.x+（double 货币），运行时反射自动识别
+    versionRange="[1.0,)"
     ordering="NONE"
     side="BOTH"
 

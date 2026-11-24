@@ -33,7 +33,22 @@ license="${mod_license}"
 [[dependencies.${mod_id}]]
     modId="sdmshop"
     mandatory=false
-    versionRange="[6.11,)"
+    # 兼容 6.x（sdmshoprework）与 7.x+（SDM Economy），运行时反射自动识别
+    versionRange="[6.0,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="sdmshop2"
+    mandatory=false
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="viscript_shop"
+    mandatory=false
+    # 1.20.1 起 ViScriptShop 提供 Forge 版；货币 API 双签名（int/double）运行时自动识别
+    versionRange="[1.0,)"
     ordering="NONE"
     side="BOTH"
 

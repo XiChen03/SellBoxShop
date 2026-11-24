@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.shop.network.ShopEditPayload;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.gui.GuiGraphics;
@@ -8,7 +10,20 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+/**
+ * 编辑分类弹窗。
+ * <p>
+ * 按钮布局：
+ * <pre>
+ *      上移   下移
+ *      删除此分类
+ *   取消        保存
+ * </pre>
+ * 配色全部取自 {@link GuiTheme}，跟随主题切换。
+ */
 public class EditCategoryScreen extends Screen {
+    private final GuiTheme T = GuiTheme.get();
+
     private float sf;
     private int panelLeft, panelTop, panelW, panelH;
     private int cx;
@@ -37,10 +52,17 @@ public class EditCategoryScreen extends Screen {
 
         int pad = (int) Math.round(15 * sf);
         int rowGap = (int) Math.round(6 * sf);
-        int totalContentH = (int) Math.round(24 * sf) + boxH + rowGap + btnH + rowGap + btnH + rowGap + btnH + (int) Math.round(10 * sf);
+
+        // 内容：标题带 + 名称行 + 3 行按钮
+        int contentH = (int) Math.round(24 * sf)      // 标题
+                + boxH + rowGap                        // 名称输入
+                + btnH + rowGap                        // 上移/下移
+                + btnH + rowGap                        // 删除此分类
+                + btnH                                 // 取消/保存
+                + (int) Math.round(22 * sf);           // 底部信息
 
         int maxPanelH = height - 20;
-        panelH = Math.min((int) Math.round(totalContentH) + (int) Math.round(12 * sf), maxPanelH);
+        panelH = Math.min(contentH + (int) Math.round(12 * sf), maxPanelH);
         panelH = Math.max(panelH, (int) Math.round(180 * sf));
         panelTop = Math.max(10, (height - panelH) / 2 - 10);
 
@@ -52,7 +74,8 @@ public class EditCategoryScreen extends Screen {
         nameBoxW = (int) Math.round(140 * sf);
         nameBoxH = boxH;
 
-        this.nameBox = new EditBox(this.font, nameBoxX + (int) Math.round(2 * sf), nameBoxY + 1, nameBoxW - (int) Math.round(4 * sf), boxH - 2,
+        this.nameBox = new EditBox(this.font, GuiDraw.innerTextX(nameBoxX), GuiDraw.innerTextY(nameBoxY, boxH),
+                GuiDraw.innerWidth(nameBoxW), boxH - 2,
                 Component.literal("分类名称"));
         this.nameBox.setBordered(false);
         this.nameBox.setValue(categoryName);
@@ -60,16 +83,45 @@ public class EditCategoryScreen extends Screen {
 
         curY += boxH + rowGap;
 
-        // Buttons shrunk 1/3 and centered on screen center
-        float shrink = 2f / 3f;
-        int btnGap = (int) Math.round(4 * sf);
-        int btnW1 = (int) Math.round(70 * sf * shrink);
-        int btnW2 = (int) Math.round(50 * sf * shrink);
-        int row1Total = btnW1 + btnGap + btnW2 + btnGap + btnW2;
-        int row1Start = cx - row1Total / 2;
-        int btnRow1Y = curY;
+        // ── 第 1 行：上移 | 下移 ──────────────────────────
+        int pairGap = (int) Math.round(6 * sf);
+        int halfW = (panelW - pad * 2 - pairGap) / 2;
+        int row1Y = curY;
+        addRenderableWidget(new ShopButton(cx - halfW - pairGap / 2, row1Y, halfW, btnH,
+                Component.literal("上移"),
+                btn -> {
+                    PacketDistributor.sendToServer(new ShopEditPayload(
+                            "move_category_up", categoryName, "", "", 0, -1, false, "", 1, ""));
+                    parentScreen.refreshFromConfig();
+                }));
+        addRenderableWidget(new ShopButton(cx + pairGap / 2, row1Y, halfW, btnH,
+                Component.literal("下移"),
+                btn -> {
+                    PacketDistributor.sendToServer(new ShopEditPayload(
+                            "move_category_down", categoryName, "", "", 0, -1, false, "", 1, ""));
+                    parentScreen.refreshFromConfig();
+                }));
 
-        addRenderableWidget(new ShopButton(row1Start, btnRow1Y, btnW1, btnH, Component.literal("保存名称"),
+        // ── 第 2 行：删除此分类（整行宽） ──────────────────
+        curY += btnH + rowGap;
+        int fullW = panelW - pad * 2;
+        addRenderableWidget(new ShopButton(cx - fullW / 2, curY, fullW, btnH,
+                Component.literal("删除此分类"),
+                btn -> {
+                    PacketDistributor.sendToServer(new ShopEditPayload(
+                            "remove_category", categoryName, "", "", 0, -1, false, "", 1, ""));
+                    this.minecraft.setScreen(parentScreen);
+                    parentScreen.refreshFromConfig();
+                }));
+
+        // ── 第 3 行：取消 | 保存 ──────────────────────────
+        curY += btnH + rowGap;
+        int lastY = curY;
+        addRenderableWidget(new ShopButton(cx - halfW - pairGap / 2, lastY, halfW, btnH,
+                Component.translatable("gui.shop.cancel"),
+                btn -> this.minecraft.setScreen(parentScreen)));
+        addRenderableWidget(new ShopButton(cx + pairGap / 2, lastY, halfW, btnH,
+                Component.literal("保存"),
                 btn -> {
                     String newName = nameBox.getValue().trim();
                     if (!newName.isEmpty() && !newName.equals(categoryName)) {
@@ -79,71 +131,34 @@ public class EditCategoryScreen extends Screen {
                     parentScreen.refreshFromConfig();
                     this.minecraft.setScreen(parentScreen);
                 }));
-
-        addRenderableWidget(new ShopButton(row1Start + btnW1 + btnGap, btnRow1Y, btnW2, btnH, Component.literal("上移"),
-                btn -> {
-                    PacketDistributor.sendToServer(new ShopEditPayload(
-                            "move_category_up", categoryName, "", "", 0, -1, false, "", 1, ""));
-                    parentScreen.refreshFromConfig();
-                }));
-
-        addRenderableWidget(new ShopButton(row1Start + btnW1 + btnGap + btnW2 + btnGap, btnRow1Y, btnW2, btnH, Component.literal("下移"),
-                btn -> {
-                    PacketDistributor.sendToServer(new ShopEditPayload(
-                            "move_category_down", categoryName, "", "", 0, -1, false, "", 1, ""));
-                    parentScreen.refreshFromConfig();
-                }));
-
-        curY += btnH + rowGap;
-
-        int deleteBtnW = (int) Math.round(140 * sf * shrink);
-        addRenderableWidget(new ShopButton(cx - deleteBtnW / 2, curY, deleteBtnW, btnH, Component.literal("删除此分类"),
-                btn -> {
-                    PacketDistributor.sendToServer(new ShopEditPayload(
-                            "remove_category", categoryName, "", "", 0, -1, false, "", 1, ""));
-                    this.minecraft.setScreen(parentScreen);
-                    parentScreen.refreshFromConfig();
-                }));
-
-        curY += btnH + rowGap;
-
-        int cancelBtnW = (int) Math.round(100 * sf * shrink);
-        addRenderableWidget(new ShopButton(cx - cancelBtnW / 2, curY, cancelBtnW, btnH,
-                Component.translatable("gui.shop.cancel"),
-                btn -> this.minecraft.setScreen(parentScreen)));
     }
 
     @Override
-    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
+    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {
+        // 背景由 render 里的遮罩负责，这里不画原版模糊
+    }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, 0xFF333333);
-        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, 0xFFFFAA00);
+        GuiDraw.scrim(g, width, height);
+        GuiDraw.panelWithStripe(g, panelLeft, panelTop, panelW, panelH);
+
+        // 输入框底色画在 EditBox 下面（EditBox 自身无边框）
+        GuiDraw.inputBox(g, nameBoxX, nameBoxY, nameBoxW, nameBoxH, nameBox.isFocused());
+
         super.render(g, mx, my, pt);
 
-        FontUtil.drawAutoFitCentered(g, font, "编辑分类", cx, panelTop + (int) Math.round(8 * sf), panelW - 10, 0xFFFFAA);
+        GuiDraw.title(g, font, "编辑分类", cx, panelTop + (int) Math.round(8 * sf), panelW - 10);
 
         int pad = (int) Math.round(15 * sf);
-        FontUtil.drawAutoFitText(g, font, "名称:", panelLeft + pad, nameBoxY, 60, 0xFFFFFF);
-        drawStyledBox(g, nameBoxX, nameBoxY, nameBoxW, nameBoxH, nameBox.isFocused());
+        GuiDraw.label(g, font, "名称:", panelLeft + pad, nameBoxY + 4, 60);
+        if (nameBox.getValue().isEmpty() && !nameBox.isFocused()) {
+            GuiDraw.hint(g, font, "分类名称", GuiDraw.innerTextX(nameBoxX), GuiDraw.innerTextY(nameBoxY, nameBoxH), nameBoxW - 8);
+        }
 
         int count = ShopConfig.getCategory(categoryName) != null ? ShopConfig.getCategory(categoryName).size() : 0;
-        Component info = Component.literal("商品数: " + count);
-        FontUtil.drawAutoFitCentered(g, font, info.getString(), cx, panelTop + panelH - (int) Math.round(20 * sf), panelW - 20, 0x888888);
-    }
-
-    private void drawStyledBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
-    }
-
-    private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x + 2, y, x + w - 2, y + h, color);
-        g.fill(x, y + 2, x + w, y + h - 2, color);
+        GuiDraw.note(g, font, "商品数: " + count, cx,
+                panelTop + panelH - (int) Math.round(20 * sf), panelW - 20);
     }
 
     @Override

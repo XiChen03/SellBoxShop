@@ -1,5 +1,6 @@
 package com.sellbox.mod.playershop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.playershop.network.PlayerShopTradePayload;
 import com.sellbox.mod.shop.ShopButton;
 import com.sellbox.mod.shop.ShopEntry;
@@ -61,7 +62,7 @@ public class PlayerTradeConfirmScreen extends Screen {
         int btnH = (int) Math.round(20 * sf);
         int btnShortH = (int) Math.round(16 * sf);
 
-        this.quantityBox = new EditBox(font, left + (int)(60 * sf), top + (int)(56 * sf), boxW, boxH, Component.translatable("gui.shop.quantity"));
+        this.quantityBox = new EditBox(font, GuiDraw.innerTextX(left + (int)(60 * sf)), GuiDraw.innerTextY(top + (int)(56 * sf), boxH), GuiDraw.innerWidth(boxW), boxH, Component.translatable("gui.shop.quantity"));
         this.quantityBox.setBordered(false);
         this.quantityBox.setValue("1");
         this.quantityBox.setResponder(s -> {
@@ -156,16 +157,19 @@ public class PlayerTradeConfirmScreen extends Screen {
                     (minecraft.level != null
                             ? entry.createBarterOfferStack(minecraft.level.registryAccess()) : entry.createBarterOfferStack())
                             .getHoverName().getString() + " x" + offerQ);
-            FontUtil.drawAutoFitText(g, font, barterPrice.getString(), left + (int)(15 * sf), top + (int)(38 * sf), popupW - (int)(20 * sf), 0x88FF88);
+            FontUtil.drawAutoFitText(g, font, barterPrice.getString(), left + (int)(15 * sf), top + (int)(38 * sf), popupW - (int)(20 * sf), T.textPrice);
         }
 
         ItemStack itemStack = (minecraft.level != null)
                 ? entry.createStack(minecraft.level.registryAccess()) : entry.createStack();
+        // 图标外框：先铺底色再描边。现代主题 cellBorder=0，只画框会看不见，
+        // 所以底色用 cellBg（现代主题的深色块），保证任何主题下都能看出"这是一个格子"。
+        int pad = Math.max(2, T.cornerRadius / 2);
+        if (T.cellBg != 0) {
+            fillRoundedRect(g, iconX - pad, iconY - pad, iconSize + pad * 2, iconSize + pad * 2, T.cellBg);
+        }
+        GuiDraw.iconFrame(g, iconX, iconY, iconSize);
         ItemIcons.render(g, itemStack, iconX, iconY);
-        g.fill(iconX, iconY, iconX + iconSize, iconY + 1, T.cellBorder);
-        g.fill(iconX, iconY + iconSize - 1, iconX + iconSize, iconY + iconSize, T.cellBorder);
-        g.fill(iconX, iconY, iconX + 1, iconY + iconSize, T.cellBorder);
-        g.fill(iconX + iconSize - 1, iconY, iconX + iconSize, iconY + iconSize, T.cellBorder);
 
         if (mx >= iconX && mx <= iconX + iconSize && my >= iconY && my <= iconY + iconSize) {
             ItemStack tooltipStack = itemStack.copy();
@@ -181,7 +185,7 @@ public class PlayerTradeConfirmScreen extends Screen {
 
         int boxW = (int) Math.round(80 * sf);
         int boxH = (int) Math.round(16 * sf);
-        drawBox(g, left + (int)(60 * sf), top + (int)(56 * sf), boxW, boxH, quantityBox.isFocused());
+        drawBox(g, left + (int)(60 * sf), GuiDraw.innerTextY(top + (int)(56 * sf), boxH), GuiDraw.innerWidth(boxW), boxH, quantityBox.isFocused());
 
         Component qtyLabel = Component.translatable("gui.sellbox.quantity_label");
         FontUtil.drawAutoFitText(g, font, qtyLabel.getString(), left + (int)(15 * sf), top + (int)(58 * sf), (int)(40 * sf), T.textPrimary);
@@ -226,11 +230,7 @@ public class PlayerTradeConfirmScreen extends Screen {
     }
 
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? T.inputBorderFocused : T.inputBorderUnfocused;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

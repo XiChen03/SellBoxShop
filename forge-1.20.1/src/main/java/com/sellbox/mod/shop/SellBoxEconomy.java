@@ -5,6 +5,8 @@ import com.sellbox.mod.api.IEconomy;
 import com.sellbox.mod.api.SellBoxEconomyAPI;
 import com.sellbox.mod.config.SellBoxConfig;
 import com.sellbox.mod.integration.SDMShopIntegration;
+import com.sellbox.mod.integration.VSSIntegration;
+import com.sellbox.mod.integration.VaultIntegration;
 import com.sellbox.mod.network.ModNetwork;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
@@ -23,8 +25,19 @@ public class SellBoxEconomy implements IEconomy {
     private static Path balanceFile;
     private static volatile boolean dirty = false;
 
-    private static boolean isVssEnabled() {
+    /** SDMShop 经济（6.x sdmshoprework / 7.x+ SDM Economy） */
+    private static boolean isSdmEnabled() {
         return SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled();
+    }
+
+    /** ViScriptShop 经济（1.20.1 / 1.21.1 皆可，API 双签名自动识别） */
+    private static boolean isVssEnabled() {
+        return VSSIntegration.isLoaded() && SellBoxConfig.isVssCurrencyEnabled();
+    }
+
+    /** Vault 经济：只有在混合端探测到 Economy 提供者、且配置开关打开时才接管 */
+    private static boolean isVaultEnabled() {
+        return SellBoxConfig.isVaultCurrencyEnabled() && VaultIntegration.isEconomyReady();
     }
 
     public static void init(Path configDir, Path worldDir) {
@@ -41,12 +54,18 @@ public class SellBoxEconomy implements IEconomy {
 
     @Override
     public int getBalance(UUID playerId) {
-        if (isVssEnabled()) return 0;
+        if (isVaultEnabled() || isVssEnabled() || isSdmEnabled()) return 0;
         return balances.getOrDefault(playerId, 0);
     }
 
     public static int getBalance(ServerPlayer player) {
+        if (isVaultEnabled()) {
+            return VaultIntegration.getBalance(player);
+        }
         if (isVssEnabled()) {
+            return VSSIntegration.getMoney(player);
+        }
+        if (isSdmEnabled()) {
             return SDMShopIntegration.getMoney(player);
         }
         return balances.getOrDefault(player.getUUID(), 0);
@@ -64,7 +83,7 @@ public class SellBoxEconomy implements IEconomy {
     @Override
     public boolean addBalance(UUID playerId, int amount) {
         if (amount <= 0) return true;
-        if (isVssEnabled()) return false;
+        if (isVaultEnabled() || isVssEnabled() || isSdmEnabled()) return false;
         balances.merge(playerId, amount, Integer::sum);
         dirty = true;
         return true;
@@ -72,7 +91,17 @@ public class SellBoxEconomy implements IEconomy {
 
     public static void addBalance(ServerPlayer player, int amount) {
         if (amount <= 0) return;
+        if (isVaultEnabled()) {
+            VaultIntegration.addBalance(player, amount);
+            ModNetwork.sendBalanceToPlayer(player);
+            return;
+        }
         if (isVssEnabled()) {
+            VSSIntegration.addMoney(player, amount);
+            ModNetwork.sendBalanceToPlayer(player);
+            return;
+        }
+        if (isSdmEnabled()) {
             SDMShopIntegration.addMoney(player, amount);
             ModNetwork.sendBalanceToPlayer(player);
             return;
@@ -86,7 +115,7 @@ public class SellBoxEconomy implements IEconomy {
     @Override
     public boolean deductBalance(UUID playerId, int amount) {
         if (amount <= 0) return true;
-        if (isVssEnabled()) return false;
+        if (isVaultEnabled() || isVssEnabled() || isSdmEnabled()) return false;
         int current = balances.getOrDefault(playerId, 0);
         if (current < amount) return false;
         if (current == amount) {
@@ -100,7 +129,17 @@ public class SellBoxEconomy implements IEconomy {
 
     public static boolean deductBalance(ServerPlayer player, int amount) {
         if (amount <= 0) return true;
+        if (isVaultEnabled()) {
+            boolean ok = VaultIntegration.deductBalance(player, amount);
+            if (ok) ModNetwork.sendBalanceToPlayer(player);
+            return ok;
+        }
         if (isVssEnabled()) {
+            VSSIntegration.removeMoney(player, amount);
+            ModNetwork.sendBalanceToPlayer(player);
+            return true;
+        }
+        if (isSdmEnabled()) {
             SDMShopIntegration.removeMoney(player, amount);
             ModNetwork.sendBalanceToPlayer(player);
             return true;
@@ -127,7 +166,7 @@ public class SellBoxEconomy implements IEconomy {
     @Override
     public boolean setBalance(UUID playerId, int amount) {
         if (amount < 0) amount = 0;
-        if (isVssEnabled()) return false;
+        if (isVaultEnabled() || isVssEnabled() || isSdmEnabled()) return false;
         if (amount == 0) {
             balances.remove(playerId);
         } else {
@@ -139,7 +178,17 @@ public class SellBoxEconomy implements IEconomy {
 
     public static void setBalance(ServerPlayer player, int amount) {
         if (amount < 0) amount = 0;
+        if (isVaultEnabled()) {
+            VaultIntegration.setBalance(player, amount);
+            ModNetwork.sendBalanceToPlayer(player);
+            return;
+        }
         if (isVssEnabled()) {
+            VSSIntegration.setMoney(player, amount);
+            ModNetwork.sendBalanceToPlayer(player);
+            return;
+        }
+        if (isSdmEnabled()) {
             SDMShopIntegration.setMoney(player, amount);
             ModNetwork.sendBalanceToPlayer(player);
             return;
@@ -164,7 +213,13 @@ public class SellBoxEconomy implements IEconomy {
     }
 
     public static String formatMoneyStatic(int amount) {
+        if (isVaultEnabled()) {
+            return VaultIntegration.formatMoney(amount);
+        }
         if (isVssEnabled()) {
+            return VSSIntegration.formatMoney(amount);
+        }
+        if (isSdmEnabled()) {
             return SDMShopIntegration.formatMoney(amount);
         }
         return String.format("%,d", amount);
@@ -177,6 +232,10 @@ public class SellBoxEconomy implements IEconomy {
 
     public static void sendLeaderboard(ServerPlayer requester, int page) {
         if (isVssEnabled()) {
+            VSSIntegration.sendLeaderboard(requester, page);
+            return;
+        }
+        if (isSdmEnabled()) {
             SDMShopIntegration.sendLeaderboard(requester, page);
             return;
         }

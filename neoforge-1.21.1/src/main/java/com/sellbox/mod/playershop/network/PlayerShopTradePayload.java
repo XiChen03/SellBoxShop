@@ -439,7 +439,12 @@ public record PlayerShopTradePayload(
                 buyer.getName().getString(), shopName, itemName, actualUnits, ownerPayout);
         market.writeReceipt(buyer.getName().getString(), receiptText);
         PlayerShopConfig.addEarnings(payload.shopOwnerUUID(), ownerPayout, actualUnits);
-        
+
+        com.sellbox.mod.extras.ExtrasMailbox.record(buyer, "buy", com.sellbox.mod.extras.ExtrasMailbox.SRC_MARKET, entry.itemId().toString(),
+                actualUnits * qtyPerUnit, ownerPayout);
+        com.sellbox.mod.extras.ExtrasNotices.buy(buyer, "extras.notice.buy.title", new Object[0],
+                "extras.notice.buy.text", new Object[]{actualUnits * qtyPerUnit, ownerPayout});
+
         ModPayloads.sendCloseScreen(buyer, "message.sellbox.buy_success");
     }
 
@@ -501,7 +506,12 @@ public record PlayerShopTradePayload(
         String receiptText = String.format("%s 向 %s 出售了 %s x%d，获得 %d 金币",
                 seller.getName().getString(), shopName, itemName, actualUnits, sellerPayout);
         market.writeReceipt(seller.getName().getString(), receiptText);
-        
+
+        com.sellbox.mod.extras.ExtrasMailbox.record(seller, "sale", com.sellbox.mod.extras.ExtrasMailbox.SRC_MARKET, entry.itemId().toString(),
+                toSell, sellerPayout);
+        com.sellbox.mod.extras.ExtrasNotices.sale(seller, "extras.notice.sale.title", new Object[0],
+                "extras.notice.sale.text", new Object[]{toSell, sellerPayout});
+
         ModPayloads.sendCloseScreen(seller, "message.sellbox.sell_success");
     }
 

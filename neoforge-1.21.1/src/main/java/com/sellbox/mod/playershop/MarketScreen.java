@@ -1,5 +1,6 @@
 package com.sellbox.mod.playershop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -36,7 +37,7 @@ public class MarketScreen extends AbstractContainerScreen<MarketMenu> {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(receiptX + 8 - textW * scale / 2, receiptY + 12, 0);
             guiGraphics.pose().scale(scale, scale, 1.0f);
-            guiGraphics.drawString(font, receiptLabel, 0, 0, T.slotLabelText);
+            guiGraphics.drawString(font, receiptLabel, 0, 0, T.slotLabelText, GuiDraw.shadow());
             guiGraphics.pose().popPose();
         }
 
@@ -52,7 +53,7 @@ public class MarketScreen extends AbstractContainerScreen<MarketMenu> {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(bagX + 8 - textW * scale / 2, bagY + 12, 0);
             guiGraphics.pose().scale(scale, scale, 1.0f);
-            guiGraphics.drawString(font, bagLabel, 0, 0, T.slotLabelText);
+            guiGraphics.drawString(font, bagLabel, 0, 0, T.slotLabelText, GuiDraw.shadow());
             guiGraphics.pose().popPose();
         }
     }

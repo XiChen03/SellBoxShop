@@ -159,6 +159,9 @@ public class ShopMenu extends AbstractContainerMenu {
                 SellBoxEconomy.addBalance(serverPlayer, earned);
                 ModPayloads.sendBalanceToPlayer(serverPlayer);
             }
+            com.sellbox.mod.extras.ExtrasMailbox.record(serverPlayer, "sale",
+                    com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    actualQty * qtyPerUnit, earned);
         }
     }
 

@@ -1,5 +1,7 @@
 package com.sellbox.mod.gui;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.shop.ShopButton;
 import com.sellbox.mod.util.FontUtil;
@@ -21,6 +23,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class PricingScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private static final int PANEL_WIDTH = 340;
     private static final int PANEL_HEIGHT = 240;
     private static final int LIST_LEFT = 12;
@@ -83,7 +87,7 @@ public class PricingScreen extends Screen {
         if (sf > 2f) sf = 2f;
 
         int searchH = 16;
-        searchBox = new EditBox(font, cx + LIST_LEFT + 2, cy + 26 + 1, 156, searchH - 2, Component.literal(""));
+        searchBox = new EditBox(font, GuiDraw.innerTextX(cx + LIST_LEFT), GuiDraw.innerTextY(cy + 26, 16), GuiDraw.innerWidth(160), searchH - 2, Component.literal(""));
         searchBox.setBordered(false);
         searchBox.setMaxLength(64);
         searchBox.setResponder(this::onSearchChanged);
@@ -127,7 +131,7 @@ public class PricingScreen extends Screen {
         int bottomY = cy + PANEL_HEIGHT - 26;
         int gap = 4;
 
-        priceBox = new EditBox(font, cx + LIST_LEFT + 2, bottomY + 1, 76, 14, Component.literal("0"));
+        priceBox = new EditBox(font, GuiDraw.innerTextX(cx + LIST_LEFT), GuiDraw.innerTextY(bottomY, 16), GuiDraw.innerWidth(80), 14, Component.literal("0"));
         priceBox.setBordered(false);
         priceBox.setMaxLength(9);
         priceBox.setFilter(s -> s.matches("-?\\d*"));
@@ -154,7 +158,7 @@ public class PricingScreen extends Screen {
                 btn -> onClose()));
     }
 
-    public void renderBackground(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics gui) {
         gui.fill(0, 0, this.width, this.height, 0x00000000);
     }
 
@@ -165,23 +169,23 @@ public class PricingScreen extends Screen {
         int cx = (width - PANEL_WIDTH) / 2;
         int cy = (height - PANEL_HEIGHT) / 2;
 
-        renderBackground(gui, mouseX, mouseY, partialTick);
+        renderBackground(gui);
 
-        gui.fill(cx, cy, cx + PANEL_WIDTH, cy + PANEL_HEIGHT, 0xFF333333);
-        gui.fill(cx + 2, cy, cx + PANEL_WIDTH - 2, cy + 1, 0xFFFFAA00);
-        FontUtil.drawAutoFitText(gui, font, title.getString(), cx + LIST_LEFT, cy + 8, PANEL_WIDTH - 20, 0xFFFFAA);
+        gui.fill(cx, cy, cx + PANEL_WIDTH, cy + PANEL_HEIGHT, T.popupBg);
+        gui.fill(cx + 2, cy, cx + PANEL_WIDTH - 2, cy + 1, T.accentStripe);
+        FontUtil.drawAutoFitText(gui, font, title.getString(), cx + LIST_LEFT, cy + 8, PANEL_WIDTH - 20, T.textTitle);
 
         boolean searchFocused = searchBox != null && searchBox.isFocused();
         drawBox(gui, cx + LIST_LEFT, cy + 26, 160, 16, searchFocused);
         if (searchBox != null && searchBox.getValue().isEmpty() && !searchFocused) {
             FontUtil.drawAutoFitText(gui, font, Component.translatable("gui.sellbox.pricing_search").getString(),
-                    cx + LIST_LEFT + (int) Math.round(6 * sf), cy + 28 + (int) Math.round(3 * sf), 148, 0x777777);
+                    GuiDraw.innerTextX(cx + LIST_LEFT), GuiDraw.innerTextY(cy + 26, 16), GuiDraw.innerWidth(160), T.textHint);
         }
 
         boolean priceFocused = priceBox != null && priceBox.isFocused();
         drawBox(gui, cx + LIST_LEFT, cy + PANEL_HEIGHT - 26, 80, 16, priceFocused);
         if (priceBox != null && priceBox.getValue().isEmpty() && !priceFocused) {
-            FontUtil.drawAutoFitText(gui, font, "价格", cx + LIST_LEFT + (int) Math.round(6 * sf), cy + PANEL_HEIGHT - 24, 68, 0x777777);
+            FontUtil.drawAutoFitText(gui, font, "价格", GuiDraw.innerTextX(cx + LIST_LEFT), GuiDraw.innerTextY(cy + PANEL_HEIGHT - 26, 16), GuiDraw.innerWidth(80), T.textHint);
         }
 
         for (var widget : renderables) {
@@ -196,7 +200,7 @@ public class PricingScreen extends Screen {
 
         int selCount = selectedKeys.size();
         Component selText = Component.translatable("gui.sellbox.pricing_selected", selCount);
-        FontUtil.drawAutoFitText(gui, font, selText.getString(), cx + LIST_LEFT + 260, cy + 48, 60, 0xAAAAAA);
+        FontUtil.drawAutoFitText(gui, font, selText.getString(), cx + LIST_LEFT + 260, cy + 48, 60, T.textMuted);
 
         // 悬浮显示（最后绘制，保证置顶不被列表元素遮挡）：图标 → 原版物品标签；NBT 文本区 → NBT 数据框
         if (hoveredItemInfo != null && hoveredItemInfo.variantNbt() != null) {
@@ -224,7 +228,7 @@ public class PricingScreen extends Screen {
             boolean selected = selectedKeys.contains(info.key);
 
             if (hovered) {
-                gui.fill(cx + LIST_LEFT, y, cx + LIST_LEFT + LIST_WIDTH, y + ROW_HEIGHT, 0x30FFFFFF);
+                gui.fill(cx + LIST_LEFT, y, cx + LIST_LEFT + LIST_WIDTH, y + ROW_HEIGHT, T.cellHoveredFill);
                 // 记录悬浮目标：图标区域（x+18 ~ x+34）→ 原版标签；其余文字区（NBT 条目）→ NBT 数据框
                 if (mouseX >= cx + LIST_LEFT + 18 && mouseX < cx + LIST_LEFT + 34) {
                     hoveredItemInfo = info;
@@ -236,7 +240,7 @@ public class PricingScreen extends Screen {
             }
 
             String check = selected ? "\u2611" : "\u2610";
-            FontUtil.drawAutoFitText(gui, font, check, cx + LIST_LEFT + 2, y + 4, 12, selected ? 0xFFFFAA : 0x888888);
+            FontUtil.drawAutoFitText(gui, font, check, cx + LIST_LEFT + 2, y + 4, 12, selected ? T.textTitle : T.textMuted);
 
             ItemStack render = new ItemStack(info.item);
             if (info.variantNbt() != null) render.setTag(info.variantNbt().copy());
@@ -244,7 +248,7 @@ public class PricingScreen extends Screen {
             FontUtil.drawAutoFitText(gui, font, info.name.getString(), cx + LIST_LEFT + 38, y + 4, LIST_WIDTH - 80, 0xDDDDDD);
 
             String priceStr = info.price > 0 ? String.valueOf(info.price) : "-";
-            int priceColor = info.price > 0 ? 0xFFFFAA : 0x666666;
+            int priceColor = info.price > 0 ? T.textTitle : T.textMuted;
             FontUtil.drawAutoFitText(gui, font, priceStr, cx + LIST_LEFT + LIST_WIDTH - font.width(priceStr) - 4, y + 4, 60, priceColor);
         }
     }
@@ -273,7 +277,7 @@ public class PricingScreen extends Screen {
         g.fill(boxX + 1, boxY + 1, boxX + boxW - 1, boxY + boxH - 1, 0xFF2C2C2C);
         int ty = boxY + 4;
         for (String line : lines) {
-            g.drawString(font, line, boxX + 4, ty, 0xDDDDDD);
+            g.drawString(font, line, boxX + 4, ty, 0xDDDDDD, GuiDraw.shadow());
             ty += lineH;
         }
     }
@@ -515,11 +519,7 @@ public class PricingScreen extends Screen {
     }
 
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     @Override

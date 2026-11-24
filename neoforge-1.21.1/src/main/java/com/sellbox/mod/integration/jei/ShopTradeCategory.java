@@ -1,5 +1,6 @@
 package com.sellbox.mod.integration.jei;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.SellBoxMod;
 import com.sellbox.mod.registry.ModItems;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -89,10 +90,10 @@ public class ShopTradeCategory extends AbstractRecipeCategory<ShopTradeRecipe> {
     private void drawCentered(GuiGraphics guiGraphics, net.minecraft.client.gui.Font font, String text, int y, int color) {
         int textWidth = font.width(Component.literal(text));
         int x = (getWidth() - textWidth) / 2;
-        guiGraphics.drawString(font, text, x, y, color, false);
+        guiGraphics.drawString(font, text, x, y, color,GuiDraw.shadow());
     }
 
     private void drawLeft(GuiGraphics guiGraphics, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
-        guiGraphics.drawString(font, text, x, y, color, false);
+        guiGraphics.drawString(font, text, x, y, color,GuiDraw.shadow());
     }
 }

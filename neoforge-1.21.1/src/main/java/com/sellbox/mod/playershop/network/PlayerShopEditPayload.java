@@ -61,18 +61,23 @@ public record PlayerShopEditPayload(
         this(action, index, itemId, price, quantity, customName, marketPos, tradeType, barterItemId, barterItemQty, targetUuid, false, goodsNbt, barterOfferStrict, barterOfferNbt, barterGoodsStrict);
     }
 
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final Type<PlayerShopEditPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "player_shop_edit"));
 
     public static final StreamCodec<FriendlyByteBuf, PlayerShopEditPayload> CODEC = StreamCodec.of(
             (buf, payload) -> {
-                buf.writeUtf(payload.action());
+                buf.writeUtf(safe(payload.action()));
                 buf.writeVarInt(payload.index());
                 buf.writeResourceLocation(payload.itemId());
                 buf.writeVarInt(payload.price());
                 buf.writeVarInt(payload.quantity());
-                buf.writeUtf(payload.customName());
+                buf.writeUtf(safe(payload.customName()));
                 buf.writeBlockPos(payload.marketPos());
-                buf.writeUtf(payload.tradeType().name());
+                buf.writeUtf(safe(payload.tradeType().name()));
                 if (payload.barterItemId() != null) {
                     buf.writeBoolean(true);
                     buf.writeResourceLocation(payload.barterItemId());
@@ -86,9 +91,9 @@ public record PlayerShopEditPayload(
                     buf.writeLong(payload.targetUuid().getLeastSignificantBits());
                 }
                 buf.writeBoolean(payload.strictMatch());
-                buf.writeUtf(payload.nbt() != null ? payload.nbt() : "");
+                buf.writeUtf(safe(payload.nbt() != null ? payload.nbt() : ""));
                 buf.writeBoolean(payload.barterOfferStrict());
-                buf.writeUtf(payload.barterOfferNbt() != null ? payload.barterOfferNbt() : "");
+                buf.writeUtf(safe(payload.barterOfferNbt() != null ? payload.barterOfferNbt() : ""));
                 buf.writeBoolean(payload.barterGoodsStrict());
             },
             buf -> {

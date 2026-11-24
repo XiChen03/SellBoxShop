@@ -11,11 +11,16 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record SetEntryQuestPacket(String category, int index, Long requiredQuestId) implements CustomPacketPayload {
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final Type<SetEntryQuestPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "set_entry_quest"));
 
     public static final StreamCodec<FriendlyByteBuf, SetEntryQuestPacket> CODEC = StreamCodec.of(
             (buf, payload) -> {
-                buf.writeUtf(payload.category);
+                buf.writeUtf(safe(payload.category));
                 buf.writeVarInt(payload.index);
                 buf.writeBoolean(payload.requiredQuestId != null);
                 if (payload.requiredQuestId != null) {

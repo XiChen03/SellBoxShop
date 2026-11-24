@@ -1,5 +1,6 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.shop.network.ShopEditPayload;
 import com.sellbox.mod.util.FontUtil;
 import com.sellbox.mod.util.PinyinUtil;
@@ -70,7 +71,7 @@ public class ShopItemPickerScreen extends Screen {
     private int confirmBtnX, backBtnX, btnRowY, btnW, btnH;
 
     // 分隔线颜色
-    private static final int SEP_COLOR = 0xFF555555;
+    private int sepColor() { return T.separatorLine; }
 
     private String searchQuery = "";
     private com.sellbox.mod.util.ItemSortUtil.SortMode sortMode = com.sellbox.mod.util.ItemSortUtil.SortMode.NAME;
@@ -78,6 +79,19 @@ public class ShopItemPickerScreen extends Screen {
     private final String categoryName;
     private final int editIndex;
     private final ShopEntry editEntry;
+
+    // ── 多选模式 ──
+    /** 预览清单最多显示几行 */
+    private static final int MULTI_PREVIEW_ROWS = 3;
+
+    private boolean multiSelect = false;
+    /** 多选已选中的条目，保持点击顺序 */
+    private final List<ItemInfo> multiPicked = new ArrayList<>();
+    private int multiToggleX, multiToggleY, multiToggleW, multiToggleH;
+    /** 多选文字说明的右边界（让开「数量:」标签） */
+    private int multiLabelRightX = 0;
+    /** 预览区悬停时需要显示的物品栈 */
+    private ItemStack previewHoverStack = ItemStack.EMPTY;
 
     private List<ItemInfo> allItems = new ArrayList<>();
     private List<ItemInfo> filteredItems = new ArrayList<>();
@@ -221,8 +235,8 @@ public class ShopItemPickerScreen extends Screen {
         // 搜索框与右侧按钮区域隔离：宽度不超过排序按钮左缘
         searchW = Math.min(gridW, Math.max(8, sortBX - searchX - 6));
 
-        searchBox = new EditBox(font, searchX + searchBoxInset, searchY + 1,
-                searchW - searchBoxInset * 2, searchH - 2, Component.literal(""));
+        searchBox = new EditBox(font, GuiDraw.innerTextX(searchX), GuiDraw.innerTextY(searchY, searchH),
+                GuiDraw.innerWidth(searchW), searchH - 2, Component.literal(""));
         searchBox.setBordered(false);
         searchBox.setMaxLength(64);
         searchBox.setResponder(q -> { searchQuery = q.toLowerCase().trim(); scrollOffset = 0; jeiOffset = 0; applyFilter(); });
@@ -308,8 +322,8 @@ public class ShopItemPickerScreen extends Screen {
         priceBoxX = panelLeft + panelW - priceBoxW - 10;
         priceBoxY = modeBarY;
 
-        priceBox = new EditBox(font, priceBoxX + 2, priceBoxY + 1,
-                priceBoxW - 4, priceBoxH - 2, Component.literal(""));
+        priceBox = new EditBox(font, GuiDraw.innerTextX(priceBoxX), GuiDraw.innerTextY(priceBoxY, priceBoxH),
+                GuiDraw.innerWidth(priceBoxW), priceBoxH - 2, Component.literal(""));
         priceBox.setBordered(false);
         priceBox.setMaxLength(9);
         priceBox.setFilter(s -> s.matches("\\d*"));
@@ -327,8 +341,8 @@ public class ShopItemPickerScreen extends Screen {
         customNameY = modeBarY;
         customNameH = modeBtnH;
         if (customNameW >= 24) {
-            customNameBox = new EditBox(font, customNameX + 2, customNameY + 1,
-                    customNameW - 4, customNameH - 2, Component.literal(""));
+            customNameBox = new EditBox(font, GuiDraw.innerTextX(customNameX), GuiDraw.innerTextY(customNameY, customNameH),
+                    GuiDraw.innerWidth(customNameW), customNameH - 2, Component.literal(""));
             customNameBox.setBordered(false);
             customNameBox.setMaxLength(64);
             if (editEntry != null && editEntry.customName() != null) customNameBox.setValue(editEntry.customName());
@@ -346,8 +360,18 @@ public class ShopItemPickerScreen extends Screen {
         int unlockBtnX = infoLeft + infoW - unlockBtnW - rightPad;
         int qtyCfmX = unlockBtnX - gap - qtyBtnW;
         qtyBoxX = qtyCfmX - gap - qtyBoxW;
-        qtyBox = new EditBox(font, qtyBoxX + 2, qtyBoxY + 1,
-                qtyBoxW - 4, qtyBoxH - 2, Component.literal(""));
+
+        // ── 多选开关：与数量框同一行，靠左 ──
+        // 右边界必须让开「数量:」标签，否则「多选 N 项」会和它叠在一起
+        multiToggleW = 14;
+        multiToggleH = 14;
+        multiToggleX = infoLeft + 4;
+        multiToggleY = qtyBoxY;
+        String qtyLabelText = barterMode ? (selectingSecond ? "商品数量:" : "出价数量:") : "数量:";
+        multiLabelRightX = Math.max(multiToggleX + multiToggleW + 20,
+                qtyBoxX - font.width(qtyLabelText) - 8);
+        qtyBox = new EditBox(font, GuiDraw.innerTextX(qtyBoxX), GuiDraw.innerTextY(qtyBoxY, qtyBoxH),
+                GuiDraw.innerWidth(qtyBoxW), qtyBoxH - 2, Component.literal(""));
         qtyBox.setBordered(false);
         qtyBox.setFilter(s -> s.matches("\\d*"));
         qtyBox.setMaxLength(4);
@@ -480,6 +504,34 @@ public class ShopItemPickerScreen extends Screen {
     }
 
     private void confirm() {
+        // 多选模式：把已选清单逐条按当前价格/数量添加
+        if (multiSelect && !multiPicked.isEmpty() && !barterMode) {
+            int price = 0;
+            String priceStr = priceBox != null ? priceBox.getValue().trim() : "";
+            if (!priceStr.isEmpty()) {
+                try { price = Math.max(0, Integer.parseInt(priceStr)); } catch (NumberFormatException ignored) {}
+            }
+            int qty = 1;
+            String qtyStr = qtyBox != null ? qtyBox.getValue().trim() : "1";
+            if (!qtyStr.isEmpty()) {
+                try { qty = Math.max(1, Math.min(9999, Integer.parseInt(qtyStr))); } catch (NumberFormatException ignored) {}
+            }
+            String cName = customNameBox != null ? customNameBox.getValue().trim() : "";
+            for (ItemInfo info : multiPicked) {
+                String nbtStr = null;
+                if (minecraft.level != null) {
+                    ItemStack src = info.variantNbt != null ? renderable(info) : info.sample();
+                    nbtStr = ShopEntry.componentPatchToJson(src.getComponentsPatch(), minecraft.level.registryAccess());
+                }
+                PacketDistributor.sendToServer(new ShopEditPayload("add_item", categoryName,
+                        info.id.toString(), tradeType.name().toLowerCase(), price, -1, false, "",
+                        qty, cName, null, 1, info.variantNbt != null, nbtStr));
+            }
+            minecraft.setScreen(parentScreen);
+            parentScreen.refreshFromConfig();
+            return;
+        }
+
         if (barterMode) {
             String cur = qtyBox != null ? qtyBox.getValue() : "1";
             if (selectingSecond) {
@@ -566,9 +618,15 @@ public class ShopItemPickerScreen extends Screen {
         int tabH = 14;
         int tabX = panelLeft + 10;
         int tabY = panelTop - tabH + 2;
-        fillRoundedRect(g, tabX, tabY, tabW, tabH + 1, T.cellBorder);
+        // 页签：底色用 popupBg（够实，现代主题也看得见），描边用 frameColor。
+        // 之前整块用 frameColor 填充，现代主题下 cellBorder=0 → 退化成半透明白，
+        // 页签等于没画，文字就"飘"在面板外面了。
+        fillRoundedRect(g, tabX, tabY, tabW, tabH + 1, T.popupBg);
+        g.fill(tabX + 2, tabY, tabX + tabW - 2, tabY + 1, GuiDraw.frameColor());
+        g.fill(tabX, tabY + 2, tabX + 1, tabY + tabH - 1, GuiDraw.frameColor());
+        g.fill(tabX + tabW - 1, tabY + 2, tabX + tabW, tabY + tabH - 1, GuiDraw.frameColor());
         g.fill(tabX + 2, tabY + tabH, tabX + tabW - 2, tabY + tabH + 1, T.popupBg);
-        g.drawString(font, title, tabX + (tabW - font.width(title)) / 2, tabY + (tabH - font.lineHeight) / 2 + 1, 0xFFFFAA);
+        g.drawString(font, title, tabX + (tabW - font.width(title)) / 2, tabY + (tabH - font.lineHeight) / 2 + 1, T.textTitle, GuiDraw.shadow());
 
         super.render(g, mx, my, pt);
 
@@ -576,12 +634,12 @@ public class ShopItemPickerScreen extends Screen {
         boolean searchFocused = searchBox != null && searchBox.isFocused();
         drawBox(g, searchX, searchY, searchW, searchH, searchFocused);
         if (searchBox != null && searchBox.getValue().isEmpty() && !searchFocused) {
-            FontUtil.drawAutoFitText(g, font, "搜索物品...", searchX + 6, searchY + 3, searchW - 12, 0x777777);
+            FontUtil.drawAutoFitText(g, font, "搜索物品...", GuiDraw.innerTextX(searchX), GuiDraw.innerTextY(searchY, searchH), searchW - 12, T.textHint);
         }
 
         // ======== 分隔线1 ========
         int sep1Y = searchY + searchH + 4;
-        g.fill(panelLeft + 4, sep1Y, panelLeft + panelW - 4, sep1Y + 1, SEP_COLOR);
+        g.fill(panelLeft + 4, sep1Y, panelLeft + panelW - 4, sep1Y + 1, sepColor());
 
         // ======== 物品网格 ========
         g.enableScissor(v2s(gridX), v2s(gridTop), v2s(gridX + gridW), v2s(gridTop + gridH));
@@ -594,7 +652,10 @@ public class ShopItemPickerScreen extends Screen {
             int x = gridX + col * cellW;
             int y = gridTop + row * cellH;
             boolean hovered = mx >= x && mx < x + cellW && my >= y && my < y + cellH;
-            boolean sel = filteredItems.get(i).item == selectedItem;
+            ItemInfo curInfo = filteredItems.get(i);
+            boolean multiPickedHere = multiSelect && isMultiPicked(curInfo);
+            // 多选模式下高亮只认「是否在清单里」；否则右键取消后 selectedItem 还指着它，染色会残留
+            boolean sel = multiSelect ? multiPickedHere : (curInfo.item == selectedItem);
             if (sel) g.fill(x + 1, y + 1, x + cellW - 1, y + cellH - 1, T.cellSelectedFill);
             else if (hovered) g.fill(x + 1, y + 1, x + cellW - 1, y + cellH - 1, T.cellHoveredFill);
             if (sel) {
@@ -628,6 +689,9 @@ public class ShopItemPickerScreen extends Screen {
         g.fill(infoLeft, infoTop, infoLeft + infoW, infoTop + infoH, T.infoPanelBg);
         if (barterMode) {
             renderBarterInfo(g);
+        } else if (multiSelect && !multiPicked.isEmpty()) {
+            // 多选模式：顶部排列所有已选图标
+            renderMultiIconGrid(g, mx, my);
         } else if (selectedItem != null) {
             ItemStack selStack = (selectedStack != null && selectedStack.getItem() == selectedItem)
                     ? selectedStack : new ItemStack(selectedItem);
@@ -646,73 +710,59 @@ public class ShopItemPickerScreen extends Screen {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(selectedItem);
             String idStr = id.toString();
             int idY = nameY + 10;
-            FontUtil.drawAutoFitCentered(g, font, idStr, infoLeft + infoW / 2, idY, infoW - 8, 0x888888);
+            FontUtil.drawAutoFitCentered(g, font, idStr, infoLeft + infoW / 2, idY, infoW - 8, T.textMuted);
             // 背包标记
             int detailY = idY;
             if (isItemInPlayerInventory(selectedItem)) {
                 String owned = "背包已拥有";
-                FontUtil.drawAutoFitCentered(g, font, owned, infoLeft + infoW / 2, idY + 10, infoW - 8, 0x88FFAA);
+                FontUtil.drawAutoFitCentered(g, font, owned, infoLeft + infoW / 2, idY + 10, infoW - 8, T.textInInventory);
                 detailY = idY + 10;
             }
             // 模式显示
             String modeStr = "交易模式: " + (tradeType == ShopEntry.TradeType.BUY ? "购买" : "出售");
-            FontUtil.drawAutoFitCentered(g, font, modeStr, infoLeft + infoW / 2, detailY + 10, infoW - 8, 0xFFAA00);
+            FontUtil.drawAutoFitCentered(g, font, modeStr, infoLeft + infoW / 2, detailY + 10, infoW - 8, T.textTitle);
             if (!barterMode) {
                 String matchStr = (strictMatch ? "严格匹配" : "ID相同")
                         + ((selectedStack != null && selectedStack.getItem() == selectedItem && !selectedStack.getComponentsPatch().isEmpty()) ? " (含NBT)" : "");
-                FontUtil.drawAutoFitCentered(g, font, matchStr, infoLeft + infoW / 2, detailY + 20, infoW - 8, 0xFF88AA);
+                FontUtil.drawAutoFitCentered(g, font, matchStr, infoLeft + infoW / 2, detailY + 20, infoW - 8, T.textMatchMode);
             }
         } else {
             String hint = "请选择一个物品";
-            FontUtil.drawAutoFitCentered(g, font, hint, infoLeft + infoW / 2, infoTop + infoH / 2, infoW - 8, 0x777777);
+            FontUtil.drawAutoFitCentered(g, font, hint, infoLeft + infoW / 2, infoTop + infoH / 2, infoW - 8, T.textHint);
         }
 
-        // 实时预览（数量框上方）
-        int previewY = qtyBoxY - font.lineHeight - 2;
-        String priceVal = priceBox != null ? priceBox.getValue() : "";
-        String qtyVal = qtyBox != null ? qtyBox.getValue() : "1";
-        if (barterMode) {
-            String offerName = selectedItem != null ? selectedItem.getName(new ItemStack(selectedItem)).getString() : "?";
-            String goodsName = secondSelectedItem != null ? secondSelectedItem.getName(new ItemStack(secondSelectedItem)).getString() : "?";
-            String offerQtyStr = offerLocked ? "x" + barterOfferQty : "";
-            String goodsQtyStr = goodsLocked ? "x" + barterGoodsQty : "";
-            String curQtyStr = "x" + qtyVal;
-            String preview;
-            if (!selectingSecond) {
-                preview = offerName + curQtyStr + " → " + goodsName + goodsQtyStr;
-            } else {
-                preview = offerName + offerQtyStr + " → " + goodsName + curQtyStr;
-            }
-            FontUtil.drawAutoFitText(g, font, preview, infoLeft + 4, previewY, infoW - 8, 0xFFD700);
-        } else if (selectedItem != null) {
-            String itemName = selectedItem.getName(new ItemStack(selectedItem)).getString();
-            String qtyStr = qtyVal.isEmpty() || qtyVal.equals("1") ? "" : "x" + qtyVal;
-            String preview = "¥" + (priceVal.isEmpty() ? "0" : priceVal) + " → " + itemName + qtyStr;
-            FontUtil.drawAutoFitText(g, font, preview, infoLeft + 4, previewY, infoW - 8, 0xFFD700);
+        // ======== 多选开关（预览行左边的小方块） ========
+        renderMultiToggle(g, smx, smy);
+
+        // 多选模式下：预览区改成"已选清单"，按点击顺序逐行列出
+        if (multiSelect && !multiPicked.isEmpty()) {
+            renderMultiPreview(g, mx, my);
+        } else {
+            renderSinglePreview(g);
         }
 
         // ======== 分隔线2 ========
         int sep2Y = jeiTop + jeiH + 2;
-        g.fill(panelLeft + 4, sep2Y, panelLeft + panelW - 4, sep2Y + 1, SEP_COLOR);
+        g.fill(panelLeft + 4, sep2Y, panelLeft + panelW - 4, sep2Y + 1, sepColor());
 
         // ======== JEI 物品候选条 ========
         renderJeiRow(g, mx, my);
 
         // ======== 分隔线3 ========
         int sep3Y = modeBarY + modeBtnH + 2;
-        g.fill(panelLeft + 4, sep3Y, panelLeft + panelW - 4, sep3Y + 1, SEP_COLOR);
+        g.fill(panelLeft + 4, sep3Y, panelLeft + panelW - 4, sep3Y + 1, sepColor());
 
         // ======== 模式切换标签 ========
         int modeLabelX = panelLeft + 10;
         int buttonStartX = modeSellBtnX;
         String modeLbl = "模式切换:";
-        g.drawString(font, modeLbl, modeLabelX, modeBarY + (modeBtnH - font.lineHeight) / 2, T.textMuted);
+        g.drawString(font, modeLbl, modeLabelX, modeBarY + (modeBtnH - font.lineHeight) / 2, T.textMuted, GuiDraw.shadow());
         // 高亮当前选中的模式按钮
         int highlightX = (tradeType == ShopEntry.TradeType.SELL) ? modeSellBtnX : modeBuyBtnX;
-        g.fill(highlightX, modeBarY, highlightX + modeBtnW, modeBarY + modeBtnH, 0x444488FF);
+        g.fill(highlightX, modeBarY, highlightX + modeBtnW, modeBarY + modeBtnH, T.catSelectedFill);
         // 绘制按钮文字
-        FontUtil.drawAutoFitCentered(g, font, "出售模式", modeSellBtnX + modeBtnW / 2, modeBarY + (modeBtnH - font.lineHeight) / 2, modeBtnW - 4, 0xFFFFFF);
-        FontUtil.drawAutoFitCentered(g, font, "购买模式", modeBuyBtnX + modeBtnW / 2, modeBarY + (modeBtnH - font.lineHeight) / 2, modeBtnW - 4, 0xFFFFFF);
+        FontUtil.drawAutoFitCentered(g, font, "出售模式", modeSellBtnX + modeBtnW / 2, modeBarY + (modeBtnH - font.lineHeight) / 2, modeBtnW - 4, T.textPrimary);
+        FontUtil.drawAutoFitCentered(g, font, "购买模式", modeBuyBtnX + modeBtnW / 2, modeBarY + (modeBtnH - font.lineHeight) / 2, modeBtnW - 4, T.textPrimary);
 
         // ======== 匹配模式切换按钮（严格匹配 / ID相同，仅普通商品；以物易物在出价/商品名字下方各自切换） ========
         if (!barterMode) {
@@ -725,23 +775,23 @@ public class ShopItemPickerScreen extends Screen {
         boolean priceFocused = priceBox != null && priceBox.isFocused();
         drawBox(g, priceBoxX, priceBoxY, priceBoxW, priceBoxH, priceFocused);
         if (priceBox != null && priceBox.getValue().isEmpty() && !priceFocused) {
-            FontUtil.drawAutoFitText(g, font, "输入价格", priceBoxX + 6, priceBoxY + 3, priceBoxW - 12, 0x777777);
+            FontUtil.drawAutoFitText(g, font, "输入价格", GuiDraw.innerTextX(priceBoxX), GuiDraw.innerTextY(priceBoxY, priceBoxH), priceBoxW - 12, T.textHint);
         }
         // 自定义物品名框边框 + 占位文字
         boolean nameFocused = customNameBox != null && customNameBox.isFocused();
         if (customNameBox != null) drawBox(g, customNameX, customNameY, customNameW, customNameH, nameFocused);
         if (customNameBox != null && customNameBox.getValue().isEmpty() && !nameFocused) {
-            FontUtil.drawAutoFitText(g, font, "自定义物品名", customNameX + 6, customNameY + 3, customNameW - 12, 0x777777);
+            FontUtil.drawAutoFitText(g, font, "自定义物品名", GuiDraw.innerTextX(customNameX), GuiDraw.innerTextY(customNameY, customNameH), customNameW - 12, T.textHint);
         }
         // 数量框边框 + 占位文字（信息面板右下角）
         boolean qtyFocused = qtyBox != null && qtyBox.isFocused();
         String qtyLabel = barterMode ? (selectingSecond ? "商品数量:" : "出价数量:") : "数量:";
         int qtyLabelW = font.width(qtyLabel);
         int qtyLabelX = Math.max(infoLeft + 2, qtyBoxX - qtyLabelW - 4);
-        FontUtil.drawAutoFitText(g, font, qtyLabel, qtyLabelX, qtyBoxY + (qtyBoxH - font.lineHeight) / 2, qtyBoxX - qtyLabelX - 2, 0xCCCCCC);
+        FontUtil.drawAutoFitText(g, font, qtyLabel, qtyLabelX, qtyBoxY + (qtyBoxH - font.lineHeight) / 2, qtyBoxX - qtyLabelX - 2, T.textSecondary);
         drawBox(g, qtyBoxX, qtyBoxY, qtyBoxW, qtyBoxH, qtyFocused);
         if (qtyBox != null && qtyBox.getValue().isEmpty() && !qtyFocused) {
-            FontUtil.drawAutoFitText(g, font, "数量", qtyBoxX + 6, qtyBoxY + 3, qtyBoxW - 12, 0x777777);
+            FontUtil.drawAutoFitText(g, font, "数量", GuiDraw.innerTextX(qtyBoxX), GuiDraw.innerTextY(qtyBoxY, qtyBoxH), qtyBoxW - 12, T.textHint);
         }
 
         g.pose().popPose();
@@ -756,6 +806,8 @@ public class ShopItemPickerScreen extends Screen {
         }
         // 悬浮品质卡：网格/JEI 悬浮变体条目时显示带 BrewLevel 品质 NBT 的原版资料卡
         if (!gridHoverStack.isEmpty()) g.renderTooltip(font, gridHoverStack, smx, smy);
+        // 多选预览区悬浮：显示该行的物品资料卡
+        else if (!previewHoverStack.isEmpty()) g.renderTooltip(font, previewHoverStack, smx, smy);
     }
 
     /** 虚拟设计坐标 → 屏幕坐标（enableScissor 不经过 pose，需手动换算） */
@@ -773,77 +825,71 @@ public class ShopItemPickerScreen extends Screen {
         // 标签：出价 / 商品（带锁定状态）
         String offerLabel = offerLocked ? "出价 [已锁定]" : (selectingSecond ? "出价" : "出价 [选择中]");
         String goodsLabel = goodsLocked ? "商品 [已锁定]" : (!selectingSecond ? "商品" : "商品 [选择中]");
-        FontUtil.drawAutoFitCentered(g, font, offerLabel, infoLeft + half / 2, infoTop + 4, half - 4, selectingSecond ? 0x888888 : 0xFFAA00);
-        FontUtil.drawAutoFitCentered(g, font, goodsLabel, infoLeft + half + half / 2, infoTop + 4, half - 4, selectingSecond ? 0xFFAA00 : 0x888888);
+        FontUtil.drawAutoFitCentered(g, font, offerLabel, infoLeft + half / 2, infoTop + 4, half - 4, selectingSecond ? T.textMuted : T.textTitle);
+        FontUtil.drawAutoFitCentered(g, font, goodsLabel, infoLeft + half + half / 2, infoTop + 4, half - 4, selectingSecond ? T.textTitle : T.textMuted);
         // 左侧：出价物品
         if (offerItem != null) {
             int ix1 = infoLeft + (half - iconSize) / 2;
             ItemStack offerStackRender = (offerStack != null && offerStack.getItem() == offerItem)
                     ? offerStack : new ItemStack(offerItem);
             ItemIcons.render(g, offerStackRender, ix1, iconY);
-            int borderCol = offerLocked ? 0xFF44FF44 : (selectingSecond ? 0xFF888888 : 0xFF4488FF);
+            int borderCol = offerLocked ? T.barterLockedBorder : (selectingSecond ? T.textMuted : T.btnBorder);
             drawItemBorderColor(g, ix1, iconY, iconSize, borderCol);
             String name1 = offerItem.getName(offerStackRender).getString();
             int nameY1 = iconY + iconSize + 2;
             FontUtil.drawAutoFitCentered(g, font, name1, infoLeft + half / 2, nameY1, half - 4,
-                    offerLocked ? 0x88FF88 : (selectingSecond ? 0x888888 : 0x88CCFF));
+                    offerLocked ? T.textPrice : (selectingSecond ? T.textMuted : T.catText));
             // 出价物匹配模式（名字下方，可点击切换）
             int offerModeY = nameY1 + font.lineHeight + 2;
             String offerMode = barterOfferStrict ? "严格NBT" : "物品ID";
             FontUtil.drawAutoFitCentered(g, font, offerMode, infoLeft + half / 2, offerModeY, half - 4,
-                    barterOfferStrict ? 0xFFD700 : 0x888888);
+                    barterOfferStrict ? T.textTotal : T.textMuted);
             if (offerLocked) {
                 String qtyStr = "x" + barterOfferQty;
-                FontUtil.drawAutoFitCentered(g, font, qtyStr, infoLeft + half / 2, offerModeY + font.lineHeight + 2, half - 4, 0x88FF88);
+                FontUtil.drawAutoFitCentered(g, font, qtyStr, infoLeft + half / 2, offerModeY + font.lineHeight + 2, half - 4, T.textPrice);
             }
         } else {
             String hint = selectingSecond ? "已锁定" : "选择物品";
-            FontUtil.drawAutoFitCentered(g, font, hint, infoLeft + half / 2, iconY + iconSize / 2, half - 4, 0x777777);
+            FontUtil.drawAutoFitCentered(g, font, hint, infoLeft + half / 2, iconY + iconSize / 2, half - 4, T.textHint);
         }
         // 箭头
         String arrow = " → ";
         int arrowX = infoLeft + half - font.width(arrow) / 2;
         int arrowY = iconY + iconSize / 2 - font.lineHeight / 2;
-        g.drawString(font, arrow, arrowX, arrowY, 0xFFAA00);
+        g.drawString(font, arrow, arrowX, arrowY, T.textTitle, GuiDraw.shadow());
         // 右侧：商品物品
         if (goodsItem != null) {
             int ix2 = infoLeft + half + (half - iconSize) / 2;
             ItemStack goodsStackRender = (goodsStack != null && goodsStack.getItem() == goodsItem)
                     ? goodsStack : new ItemStack(goodsItem);
             ItemIcons.render(g, goodsStackRender, ix2, iconY);
-            int borderCol = goodsLocked ? 0xFF44FF44 : (!selectingSecond ? 0xFF888888 : 0xFF4488FF);
+            int borderCol = goodsLocked ? T.barterLockedBorder : (!selectingSecond ? T.textMuted : T.btnBorder);
             drawItemBorderColor(g, ix2, iconY, iconSize, borderCol);
             String name2 = goodsItem.getName(goodsStackRender).getString();
             int nameY2 = iconY + iconSize + 2;
             FontUtil.drawAutoFitCentered(g, font, name2, infoLeft + half + half / 2, nameY2, half - 4,
-                    goodsLocked ? 0x88FF88 : (!selectingSecond ? 0x888888 : 0x88CCFF));
+                    goodsLocked ? T.textPrice : (!selectingSecond ? T.textMuted : T.catText));
             // 商品物匹配模式（名字下方，可点击切换）
             int goodsModeY = nameY2 + font.lineHeight + 2;
             String goodsMode = barterGoodsStrict ? "严格NBT" : "物品ID";
             FontUtil.drawAutoFitCentered(g, font, goodsMode, infoLeft + half + half / 2, goodsModeY, half - 4,
-                    barterGoodsStrict ? 0xFFD700 : 0x888888);
+                    barterGoodsStrict ? T.textTotal : T.textMuted);
             if (goodsLocked) {
                 String qtyStr = "x" + barterGoodsQty;
-                FontUtil.drawAutoFitCentered(g, font, qtyStr, infoLeft + half + half / 2, goodsModeY + font.lineHeight + 2, half - 4, 0x88FF88);
+                FontUtil.drawAutoFitCentered(g, font, qtyStr, infoLeft + half + half / 2, goodsModeY + font.lineHeight + 2, half - 4, T.textPrice);
             }
         } else {
             String hint = !selectingSecond ? "已锁定" : "选择物品";
-            FontUtil.drawAutoFitCentered(g, font, hint, infoLeft + half + half / 2, iconY + iconSize / 2, half - 4, 0x777777);
+            FontUtil.drawAutoFitCentered(g, font, hint, infoLeft + half + half / 2, iconY + iconSize / 2, half - 4, T.textHint);
         }
     }
 
     private void drawItemBorderColor(GuiGraphics g, int x, int y, int size, int color) {
-        g.fill(x, y, x + size, y + 1, color);
-        g.fill(x, y + size - 1, x + size, y + size, color);
-        g.fill(x, y, x + 1, y + size, color);
-        g.fill(x + size - 1, y, x + size, y + size, color);
+        GuiDraw.iconFrame(g, x, y, size);
     }
 
     private void drawItemBorder(GuiGraphics g, int x, int y, int size) {
-        g.fill(x, y, x + size, y + 1, 0xFF444444);
-        g.fill(x, y + size - 1, x + size, y + size, 0xFF444444);
-        g.fill(x, y, x + 1, y + size, 0xFF444444);
-        g.fill(x + size - 1, y, x + size, y + size, 0xFF444444);
+        GuiDraw.iconFrame(g, x, y, size);
     }
 
     private void renderJeiRow(GuiGraphics g, int mx, int my) {
@@ -862,12 +908,12 @@ public class ShopItemPickerScreen extends Screen {
             int y = jeiTop + (jeiH - jeiItemH) / 2;
             boolean hover = mx >= x && mx < x + jeiItemW && my >= y && my < y + jeiItemH;
             boolean sel = filteredItems.get(idx).item == selectedItem;
-            if (sel) g.fill(x, y, x + jeiItemW, y + jeiItemH, 0x404488FF);
-            else if (hover) g.fill(x, y, x + jeiItemW, y + jeiItemH, 0x30FFFFFF);
-            g.fill(x + 2, y, x + jeiItemW - 2, y + 1, 0x66444444);
-            g.fill(x + 2, y + jeiItemH - 1, x + jeiItemW - 2, y + jeiItemH, 0x66444444);
-            g.fill(x, y + 2, x + 1, y + jeiItemH - 2, 0x66444444);
-            g.fill(x + jeiItemW - 1, y + 2, x + jeiItemW, y + jeiItemH - 2, 0x66444444);
+            if (sel) g.fill(x, y, x + jeiItemW, y + jeiItemH, T.cellSelectedFill);
+            else if (hover) g.fill(x, y, x + jeiItemW, y + jeiItemH, T.cellHoveredFill);
+            g.fill(x + 2, y, x + jeiItemW - 2, y + 1, GuiDraw.frameColor());
+            g.fill(x + 2, y + jeiItemH - 1, x + jeiItemW - 2, y + jeiItemH, GuiDraw.frameColor());
+            g.fill(x, y + 2, x + 1, y + jeiItemH - 2, GuiDraw.frameColor());
+            g.fill(x + jeiItemW - 1, y + 2, x + jeiItemW, y + jeiItemH - 2, GuiDraw.frameColor());
             ItemIcons.render(g, renderable(filteredItems.get(idx)), x + (jeiItemW - 16) / 2, y + (jeiItemH - 16) / 2);
             if (hover) gridHoverStack = renderable(filteredItems.get(idx)).copy();
         }
@@ -896,6 +942,14 @@ public class ShopItemPickerScreen extends Screen {
             }
         }
 
+        // 多选开关点击
+        if (mx >= multiToggleX && mx < multiToggleX + multiToggleW
+                && my >= multiToggleY && my < multiToggleY + multiToggleH) {
+            multiSelect = !multiSelect;
+            if (!multiSelect) multiPicked.clear();
+            return true;
+        }
+
         // 网格点击
         int endIdx = Math.min(scrollOffset + COLS * gridRows, filteredItems.size());
         for (int i = scrollOffset; i < endIdx; i++) {
@@ -911,6 +965,23 @@ public class ShopItemPickerScreen extends Screen {
                         if (!goodsLocked) applySelection(clickedInfo, true);
                     } else {
                         if (!offerLocked) applySelection(clickedInfo, false);
+                    }
+                } else if (multiSelect) {
+                    // 多选模式：左键切换加入/移除，右键只移除
+                    boolean removed;
+                    if (button == 1) {
+                        removed = multiPicked.removeIf(picked -> picked.item == clickedInfo.item);
+                    } else {
+                        removed = multiPicked.removeIf(picked -> picked.item == clickedInfo.item);
+                        if (!removed) multiPicked.add(clickedInfo);
+                    }
+                    // 被移除的那一项要同时清掉「当前选中」，否则左上的高亮不会消失
+                    if (removed && selectedItem == clickedInfo.item) {
+                        selectedItem = null;
+                        selectedStack = null;
+                    } else if (!removed) {
+                        selectedItem = clickedInfo.item;
+                        selectedStack = null;
                     }
                 } else {
                     if (button == 1 && clicked == selectedItem) {
@@ -989,6 +1060,31 @@ public class ShopItemPickerScreen extends Screen {
                 if (qtyBox != null) qtyBox.setValue(selectingSecond ? barterGoodsQty : barterOfferQty);
             }
             return true;
+        }
+
+        // 多选：右键点右侧排列的图标 = 从清单里移除该物品
+        if (multiSelect && !barterMode && !multiPicked.isEmpty()
+                && mx >= infoLeft && mx < infoLeft + infoW
+                && my >= infoTop + 8 && my < multiPreviewBottomY() - multiPreviewHeight() - 4) {
+            int iconSize = 16;
+            int cell = iconSize + 2;
+            int cols = Math.max(1, (infoW - 8) / cell);
+            int slot = (int) (((mx - (infoLeft + 4)) / cell) + ((my - (infoTop + 8)) / cell) * cols);
+            int localX = (int) ((mx - (infoLeft + 4)) % cell);
+            int localY = (int) ((my - (infoTop + 8)) % cell);
+            if (slot >= 0 && slot < multiPicked.size() && localX < iconSize && localY < iconSize) {
+                if (button == 1) {
+                    ItemInfo removedInfo = multiPicked.remove(slot);
+                    if (removedInfo != null && selectedItem == removedInfo.item) {
+                        selectedItem = null;
+                        selectedStack = null;
+                    }
+                    return true;
+                }
+                // 左键：定位到左侧网格中对应的物品
+                scrollToItem(multiPicked.get(slot).item);
+                return true;
+            }
         }
 
         // JEI 行点击
@@ -1195,12 +1291,156 @@ public class ShopItemPickerScreen extends Screen {
         return info.sample().copy();
     }
 
+
+    /** 单个物品的预览行（原有逻辑） */
+    private void renderSinglePreview(GuiGraphics g) {
+        int previewY = qtyBoxY - font.lineHeight - 2;
+        String priceVal = priceBox != null ? priceBox.getValue() : "";
+        String qtyVal = qtyBox != null ? qtyBox.getValue() : "1";
+        if (barterMode) {
+            String offerName = selectedItem != null ? selectedItem.getName(new ItemStack(selectedItem)).getString() : "?";
+            String goodsName = secondSelectedItem != null ? secondSelectedItem.getName(new ItemStack(secondSelectedItem)).getString() : "?";
+            String offerQtyStr = offerLocked ? "x" + barterOfferQty : "";
+            String goodsQtyStr = goodsLocked ? "x" + barterGoodsQty : "";
+            String curQtyStr = "x" + qtyVal;
+            String preview;
+            if (!selectingSecond) {
+                preview = offerName + curQtyStr + " → " + goodsName + goodsQtyStr;
+            } else {
+                preview = offerName + offerQtyStr + " → " + goodsName + curQtyStr;
+            }
+            FontUtil.drawAutoFitText(g, font, preview, infoLeft + 22, previewY, infoW - 26, T.textTotal);
+        } else if (selectedItem != null) {
+            String itemName = selectedItem.getName(new ItemStack(selectedItem)).getString();
+            String qtyStr = qtyVal.isEmpty() || qtyVal.equals("1") ? "" : "x" + qtyVal;
+            String preview = "¥" + (priceVal.isEmpty() ? "0" : priceVal) + " → " + itemName + qtyStr;
+            FontUtil.drawAutoFitText(g, font, preview, infoLeft + 22, previewY, infoW - 26, T.textTotal);
+        }
+    }
+
+    /** 多选开关：小方块 + 勾 + 文字说明 */
+    private void renderMultiToggle(GuiGraphics g, int smx, int smy) {
+        int x = multiToggleX, y = multiToggleY, w = multiToggleW, h = multiToggleH;
+        boolean hover = smx >= x && smx < x + w && smy >= y && smy < y + h;
+        GuiDraw.inputBox(g, x, y, w, h, false);
+        if (multiSelect) {
+            // 勾选态：实心色块 + 对勾
+            GuiDraw.fillRounded(g, x + 1, y + 1, w - 2, h - 2, T.cellSelectedFill);
+            g.drawString(font, "v", x + 4, y + 3, T.textPrimary, GuiDraw.shadow());
+        } else if (hover) {
+            GuiDraw.fillRounded(g, x + 1, y + 1, w - 2, h - 2, T.cellHoveredFill);
+        }
+        // 文字说明：勾选后变亮色，未勾选用次要色
+        String label = multiSelect
+                ? "多选 " + multiPicked.size() + " 项"
+                : "多选";
+        int labelX = x + w + 4;
+        int labelW = Math.max(8, multiLabelRightX - labelX);
+        FontUtil.drawAutoFitText(g, font, label, labelX,
+                y + (h - font.lineHeight) / 2 + 1, labelW,
+                multiSelect ? T.textPrimary : T.textMuted);
+    }
+
+    /**
+     * 多选预览：上方图标网格 + 下方文字清单。
+     * <p>图标按选中顺序从左到右排列（每行 {@link #MULTI_ICON_COLS} 个），
+     * 鼠标悬停任一图标/清单行都会弹出该物品的资料卡。
+     */
+    private void renderMultiPreview(GuiGraphics g, int mx, int my) {
+        previewHoverStack = ItemStack.EMPTY;
+
+        int lineH = font.lineHeight + 2;
+        int maxRows = Math.min(multiPicked.size(), MULTI_PREVIEW_ROWS);
+        boolean overflow = multiPicked.size() > MULTI_PREVIEW_ROWS;
+
+        // 从多选开关那一行的上方往上排，底部留 4px，避免和「多选 N 项 / 数量」这行重叠
+        int bottom = multiPreviewBottomY();
+        int listTop = bottom - multiPreviewHeight();
+        int start = Math.max(0, multiPicked.size() - maxRows);
+
+        for (int i = 0; i < maxRows; i++) {
+            ItemInfo info = multiPicked.get(start + i);
+            int rowY = listTop + i * lineH;
+            boolean hover = mx >= infoLeft && mx < infoLeft + infoW && my >= rowY && my < rowY + lineH;
+            String label = (start + i + 1) + ". " + info.name.getString();
+            if (hover) {
+                g.fill(infoLeft, rowY - 1, infoLeft + infoW, rowY + lineH - 1, T.cellHoveredFill);
+                previewHoverStack = renderable(info);
+            }
+            FontUtil.drawAutoFitText(g, font, label, infoLeft + 22, rowY, infoW - 26,
+                    hover ? T.textPrimary : T.textTotal);
+        }
+        if (overflow) {
+            FontUtil.drawAutoFitText(g, font, "…共 " + multiPicked.size() + " 项",
+                    infoLeft + 22, listTop + maxRows * lineH, infoW - 26, T.textMuted);
+        }
+    }
+
+    /** 清单区底部（多选开关那一行的上沿，留 4px 间隙） */
+    private int multiPreviewBottomY() {
+        return multiToggleY - 4;
+    }
+
+    /** 清单区总高：可见行 + 可能的「…共 N 项」提示行 */
+    private int multiPreviewHeight() {
+        if (!multiSelect || multiPicked.isEmpty()) return 0;
+        int rows = Math.min(multiPicked.size(), MULTI_PREVIEW_ROWS);
+        if (multiPicked.size() > MULTI_PREVIEW_ROWS) rows++;
+        return rows * (font.lineHeight + 2);
+    }
+
+    /**
+     * 信息面板顶部的图标排列区（多选时显示所有已选物品）。
+     * 画在单个大图标的位置，按行铺满面板宽度。
+     */
+    private void renderMultiIconGrid(GuiGraphics g, int mx, int my) {
+        int iconSize = 16;
+        int cell = iconSize + 2;
+        int cols = Math.max(1, (infoW - 8) / cell);
+        int areaTop = infoTop + 8;
+        // 底部按真实清单高度让位，不再写死 4 行
+        int areaBottom = multiPreviewBottomY() - multiPreviewHeight() - 4;
+        int maxRows = Math.max(1, (areaBottom - areaTop) / cell);
+        int maxIcons = cols * maxRows;
+
+        int count = Math.min(multiPicked.size(), maxIcons);
+        for (int i = 0; i < count; i++) {
+            ItemInfo info = multiPicked.get(i);
+            int col = i % cols;
+            int row = i / cols;
+            int x = infoLeft + 4 + col * cell;
+            int y = areaTop + row * cell;
+            boolean hover = mx >= x && mx < x + iconSize && my >= y && my < y + iconSize;
+            if (hover) {
+                g.fill(x - 1, y - 1, x + iconSize + 1, y + iconSize + 1, T.cellHoveredFill);
+                previewHoverStack = renderable(info);
+            }
+            ItemIcons.render(g, renderable(info), x, y);
+            // 序号角标（左下角小字），方便对应下方清单
+            String idx = String.valueOf(i + 1);
+            g.pose().pushPose();
+            g.pose().translate(x + 1, y + iconSize - 5, 200);
+            g.pose().scale(0.6f, 0.6f, 1.0f);
+            g.drawString(font, idx, 0, 0, T.textPrimary, GuiDraw.shadow());
+            g.pose().popPose();
+        }
+        if (multiPicked.size() > maxIcons) {
+            String more = "+" + (multiPicked.size() - maxIcons);
+            FontUtil.drawAutoFitText(g, font, more, infoLeft + 4,
+                    areaTop + maxRows * cell, infoW - 8, T.textMuted);
+        }
+    }
+
+    /** 该条目是否已在多选清单里（按 item 比较，和 toggle 逻辑一致） */
+    private boolean isMultiPicked(ItemInfo info) {
+        for (ItemInfo picked : multiPicked) {
+            if (picked.item == info.item) return true;
+        }
+        return false;
+    }
+
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

@@ -19,22 +19,27 @@ public record ShopDataPayload(
 ) implements CustomPacketPayload {
     public static final Type<ShopDataPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "shop_data"));
 
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final StreamCodec<FriendlyByteBuf, ShopDataPayload> CODEC = StreamCodec.of(
             (buf, p) -> {
-                buf.writeUtf(p.category);
+                buf.writeUtf(safe(p.category));
                 buf.writeVarInt(p.entries.size());
                 for (ShopEntry e : p.entries) {
-                    buf.writeUtf(e.itemId().toString());
-                    buf.writeUtf(e.tradeType().name());
+                    buf.writeUtf(safe(e.itemId().toString()));
+                    buf.writeUtf(safe(e.tradeType().name()));
                     buf.writeVarInt(e.price());
-                    buf.writeUtf(e.entryType());
-                    buf.writeUtf(e.extraData());
+                    buf.writeUtf(safe(e.entryType()));
+                    buf.writeUtf(safe(e.extraData()));
                     buf.writeBoolean(e.requireOp());
                     buf.writeVarInt(e.quantity());
-                    buf.writeUtf(e.customName());
+                    buf.writeUtf(safe(e.customName()));
                     if (e.barterItemId() != null) {
                         buf.writeBoolean(true);
-                        buf.writeUtf(e.barterItemId().toString());
+                        buf.writeUtf(safe(e.barterItemId().toString()));
                     } else {
                         buf.writeBoolean(false);
                     }
@@ -42,14 +47,14 @@ public record ShopDataPayload(
                     if (e.requiredQuestId() != null) {
                         buf.writeBoolean(true);
                         buf.writeLong(e.requiredQuestId());
-                        buf.writeUtf(e.requiredQuestName() != null ? e.requiredQuestName() : "");
+                        buf.writeUtf(safe(e.requiredQuestName() != null ? e.requiredQuestName() : ""));
                     } else {
                         buf.writeBoolean(false);
                     }
                     buf.writeBoolean(e.strictMatch());
-                    buf.writeUtf(e.nbt() != null ? e.nbt() : "");
+                    buf.writeUtf(safe(e.nbt() != null ? e.nbt() : ""));
                     buf.writeBoolean(e.barterOfferStrict());
-                    buf.writeUtf(e.barterOfferNbt() != null ? e.barterOfferNbt() : "");
+                    buf.writeUtf(safe(e.barterOfferNbt() != null ? e.barterOfferNbt() : ""));
                     buf.writeBoolean(e.barterGoodsStrict());
                     buf.writeVarInt(e.tradeLimit());
                     buf.writeBoolean(e.limitPerPlayer());
@@ -57,12 +62,12 @@ public record ShopDataPayload(
                 buf.writeVarInt(p.balance);
                 buf.writeVarInt(p.categories.size());
                 for (String cat : p.categories) {
-                    buf.writeUtf(cat);
+                    buf.writeUtf(safe(cat));
                 }
                 Map<String, Integer> used = p.usedCounts();
                 buf.writeVarInt(used.size());
                 for (Map.Entry<String, Integer> e : used.entrySet()) {
-                    buf.writeUtf(e.getKey());
+                    buf.writeUtf(safe(e.getKey()));
                     buf.writeVarInt(e.getValue());
                 }
             },

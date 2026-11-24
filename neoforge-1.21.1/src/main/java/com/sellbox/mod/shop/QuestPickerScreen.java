@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.shop.network.RequestQuestListPacket;
 import com.sellbox.mod.shop.network.SetEntryQuestPacket;
 import com.sellbox.mod.shop.network.SyncQuestListPacket;
@@ -14,6 +16,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class QuestPickerScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private final Screen parentScreen;
     private final String category;
     private final int entryIndex;
@@ -93,9 +97,9 @@ public class QuestPickerScreen extends Screen {
         btnY = listY + listH + pad;
         btnW = 80;
 
-        searchBox = new EditBox(font, searchX + 2, searchY + 2, searchW - 4, searchH - 4, Component.empty());
+        searchBox = new EditBox(font, GuiDraw.innerTextX(searchX), GuiDraw.innerTextY(searchY, searchH), GuiDraw.innerWidth(searchW), searchH - 4, Component.empty());
         searchBox.setMaxLength(50);
-        searchBox.setTextColor(0xFFFFFF);
+        searchBox.setTextColor(T.textPrimary);
         searchBox.setBordered(false);
         searchBox.setResponder(s -> onSearch());
         addRenderableWidget(searchBox);
@@ -259,11 +263,11 @@ public class QuestPickerScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        fillRoundedRect(g, panelX, panelY, panelW, panelH, 0xFF333333);
-        g.fill(panelX + 4, panelY + 18, panelX + panelW - 4, panelY + 19, 0xFF555555);
+        fillRoundedRect(g, panelX, panelY, panelW, panelH, T.popupBg);
+        g.fill(panelX + 4, panelY + 18, panelX + panelW - 4, panelY + 19, T.separatorLine);
 
         String titleStr = " ═══ " + title.getString() + " ═══ ";
-        FontUtil.drawAutoFitCentered(g, font, titleStr, panelX + panelW / 2, panelY + 4, panelW - 20, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, titleStr, panelX + panelW / 2, panelY + 4, panelW - 20, T.textTitle);
 
         String curQuestStr;
         int curColor;
@@ -271,31 +275,27 @@ public class QuestPickerScreen extends Screen {
             String name = currentQuestName;
             if (name != null && !name.isEmpty()) {
                 curQuestStr = "当前前置: " + name;
-                curColor = 0x88FF88;
+                curColor = T.textPrice;
             } else {
                 curQuestStr = "当前前置: 任务 #" + Long.toHexString(currentQuestId).toUpperCase();
-                curColor = 0x88FF88;
+                curColor = T.textPrice;
             }
         } else {
             curQuestStr = "当前前置: 无";
-            curColor = 0x888888;
+            curColor = T.textMuted;
         }
-        g.drawString(font, curQuestStr, panelX + 10, curQuestY, curColor);
+        g.drawString(font, curQuestStr, panelX + 10, curQuestY, curColor, GuiDraw.shadow());
 
-        int borderCol = searchFocused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(searchX + 2, searchY, searchX + searchW - 2, searchY + 1, borderCol);
-        g.fill(searchX + 2, searchY + searchH - 1, searchX + searchW - 2, searchY + searchH, borderCol);
-        g.fill(searchX, searchY + 2, searchX + 1, searchY + searchH - 2, borderCol);
-        g.fill(searchX + searchW - 1, searchY + 2, searchX + searchW, searchY + searchH - 2, borderCol);
+        GuiDraw.inputBox(g, searchX, searchY, searchW, searchH, searchFocused);
 
         if (searchBox.getValue().isEmpty() && !searchFocused) {
-            g.drawString(font, "§7搜索任务名称...", searchX + 4, searchY + 3, 0x777777);
+            g.drawString(font, "§7搜索任务名称...", GuiDraw.innerTextX(searchX), GuiDraw.innerTextY(searchY, searchH), T.textHint, GuiDraw.shadow());
         }
 
         super.render(g, mouseX, mouseY, partialTick);
 
-        g.fill(listX, listY, listX + listW, listY + listH, 0xFF222222);
-        g.fill(listX + listW - 1, listY, listX + listW, listY + listH, 0xFF333333);
+        g.fill(listX, listY, listX + listW, listY + listH, T.itemListBg);
+        g.fill(listX + listW - 1, listY, listX + listW, listY + listH, T.popupBg);
 
         int visibleRows = listH / lineH;
         int startLine = scrollOffset;
@@ -307,10 +307,10 @@ public class QuestPickerScreen extends Screen {
             boolean gHovered = mouseX >= listX && mouseX < listX + listW && mouseY >= gHeaderY && mouseY < gHeaderY + lineH;
 
             if (currentLine >= startLine && currentLine < endLine) {
-                g.fill(listX, gHeaderY, listX + listW, gHeaderY + lineH, gHovered ? 0xFF444466 : 0xFF2D2D2D);
-                g.fill(listX, gHeaderY + lineH - 1, listX + listW, gHeaderY + lineH, 0xFF333333);
+                g.fill(listX, gHeaderY, listX + listW, gHeaderY + lineH, gHovered ? T.questGroupHover : T.slotInnerFill);
+                g.fill(listX, gHeaderY + lineH - 1, listX + listW, gHeaderY + lineH, T.popupBg);
                 String indicator = gd.expanded ? "§7▼" : "§7▶";
-                g.drawString(font, " §e—" + gd.groupName + "—" + indicator, listX + 3, gHeaderY + 3, 0xFFFFAA);
+                g.drawString(font, " §e—" + gd.groupName + "—" + indicator, listX + 3, gHeaderY + 3, T.textTitle, GuiDraw.shadow());
             }
             currentLine++;
 
@@ -319,9 +319,9 @@ public class QuestPickerScreen extends Screen {
                     if (currentLine >= startLine && currentLine < endLine) {
                         int cHeaderY = listY + (currentLine - startLine) * lineH;
                         boolean cHovered = mouseX >= listX && mouseX < listX + listW && mouseY >= cHeaderY && mouseY < cHeaderY + lineH;
-                        g.fill(listX, cHeaderY, listX + listW, cHeaderY + lineH, cHovered ? 0xFF3A3A5A : 0xFF262626);
+                        g.fill(listX, cHeaderY, listX + listW, cHeaderY + lineH, cHovered ? T.questChapterHover : T.questChapterBg);
                         String indicator = cd.expanded ? "§7▼" : "§7▶";
-                        g.drawString(font, "  " + indicator + " " + cd.chapterName, listX + 12, cHeaderY + 3, 0x88CCFF);
+                        g.drawString(font, "  " + indicator + " " + cd.chapterName, listX + 12, cHeaderY + 3, T.catText, GuiDraw.shadow());
                     }
                     currentLine++;
 
@@ -331,10 +331,10 @@ public class QuestPickerScreen extends Screen {
                                 int qy = listY + (currentLine - startLine) * lineH;
                                 boolean qHovered = mouseX >= listX && mouseX < listX + listW && mouseY >= qy && mouseY < qy + lineH;
                                 if (qHovered) {
-                                    g.fill(listX, qy, listX + listW, qy + lineH, 0xFF444488);
-                                    g.drawString(font, "   " + qe.questName(), listX + 18, qy + 3, 0xFFFFFF);
+                                    g.fill(listX, qy, listX + listW, qy + lineH, T.questItemHover);
+                                    g.drawString(font, "   " + qe.questName(), listX + 18, qy + 3, T.textPrimary, GuiDraw.shadow());
                                 } else {
-                                    g.drawString(font, "   " + qe.questName(), listX + 18, qy + 3, 0xCCCCCC);
+                                    g.drawString(font, "   " + qe.questName(), listX + 18, qy + 3, T.textSecondary, GuiDraw.shadow());
                                 }
                             }
                             currentLine++;
@@ -348,11 +348,11 @@ public class QuestPickerScreen extends Screen {
         if (total > visibleRows) {
             int sbH = Math.max(8, listH * visibleRows / total);
             int sbY = listY + listH * scrollOffset / total;
-            g.fill(listX + listW - 3, sbY, listX + listW, sbY + sbH, 0xFF888888);
+            g.fill(listX + listW - 3, sbY, listX + listW, sbY + sbH, T.textMuted);
         }
 
         if (groups.isEmpty() && searchBox.getValue().isEmpty()) {
-            g.drawString(font, "§7正在获取任务列表...", listX + 5, listY + 5, 0x888888);
+            g.drawString(font, "§7正在获取任务列表...", listX + 5, listY + 5, T.textMuted, GuiDraw.shadow());
         }
 
         int clearX = panelX + panelW / 2 - btnW - 4;
@@ -367,9 +367,9 @@ public class QuestPickerScreen extends Screen {
     public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
 
     private void drawButton(GuiGraphics g, int x, int y, int w, int h, String text, boolean hovered) {
-        int bg = hovered ? 0xAA44AA44 : 0x88333333;
+        int bg = hovered ? T.btnBgGreenHovered : T.btnBgNormal;
         g.fill(x, y, x + w, y + h, bg);
-        FontUtil.drawAutoFitCentered(g, font, text, x + w / 2, y + (h - 8) / 2 + 1, w - 6, 0x88FF88);
+        FontUtil.drawAutoFitCentered(g, font, text, x + w / 2, y + (h - 8) / 2 + 1, w - 6, T.textPrice);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

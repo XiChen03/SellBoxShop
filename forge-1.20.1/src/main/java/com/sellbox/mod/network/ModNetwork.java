@@ -50,11 +50,89 @@ public class ModNetwork {
     public static int clientBalance = -1;
     public static boolean clientConfigSynced = false;
     public static boolean clientSdmEnabled = false;
+    public static boolean clientVssEnabled = false;
     public static boolean clientShopOverride = false;
+    public static boolean clientExtrasEnabled = true;
     public static boolean clientEditMode = false;
     public static Set<String> clientBlacklist = new HashSet<>();
     public static boolean clientAdminEditEnabled = false;
     public static final Map<Long, String> questNameCache = new HashMap<>();
+
+    // ──────────────────── Extras（签到/邮箱/兑换/转账/兑换码/好友） ────────────────────
+
+    public static String clientExtrasState = "";
+    public static String clientExtrasResponse = "";
+
+    /** 响应包是一次性的：界面处理完就清掉，避免重开界面时重播旧结果 */
+    public static void clearExtrasResponse() {
+        clientExtrasResponse = "";
+    }
+
+    public record ExtrasRequestPacket(String json) {
+        static void encode(ExtrasRequestPacket msg, FriendlyByteBuf buf) {
+            buf.writeUtf(msg.json == null ? "" : msg.json, 1_048_576);
+        }
+
+        static ExtrasRequestPacket decode(FriendlyByteBuf buf) {
+            return new ExtrasRequestPacket(buf.readUtf(1_048_576));
+        }
+
+        static void handle(ExtrasRequestPacket msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer sp = ctx.get().getSender();
+                if (sp != null) {
+                    com.sellbox.mod.extras.ExtrasServer.handleRequest(sp, msg.json);
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public record ExtrasStatePacket(String json) {
+        static void encode(ExtrasStatePacket msg, FriendlyByteBuf buf) {
+            buf.writeUtf(msg.json == null ? "" : msg.json, 1_048_576);
+        }
+
+        static ExtrasStatePacket decode(FriendlyByteBuf buf) {
+            return new ExtrasStatePacket(buf.readUtf(1_048_576));
+        }
+
+        static void handle(ExtrasStatePacket msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> clientExtrasState = msg.json);
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public record ExtrasNoticePacket(String json) {
+        static void encode(ExtrasNoticePacket msg, FriendlyByteBuf buf) {
+            buf.writeUtf(msg.json == null ? "" : msg.json, 1_048_576);
+        }
+
+        static ExtrasNoticePacket decode(FriendlyByteBuf buf) {
+            return new ExtrasNoticePacket(buf.readUtf(1_048_576));
+        }
+
+        static void handle(ExtrasNoticePacket msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(
+                    () -> com.sellbox.mod.extras.client.ExtrasNoticeQueue.push(msg.json));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public record ExtrasResponsePacket(String json) {
+        static void encode(ExtrasResponsePacket msg, FriendlyByteBuf buf) {
+            buf.writeUtf(msg.json == null ? "" : msg.json, 1_048_576);
+        }
+
+        static ExtrasResponsePacket decode(FriendlyByteBuf buf) {
+            return new ExtrasResponsePacket(buf.readUtf(1_048_576));
+        }
+
+        static void handle(ExtrasResponsePacket msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> clientExtrasResponse = msg.json);
+            ctx.get().setPacketHandled(true);
+        }
+    }
 
     // ──────────────────── Packet Records ────────────────────
 
@@ -331,6 +409,10 @@ public class ModNetwork {
             int xpPerBottle;
             try { xpPerBottle = Integer.parseInt(entry.extraData()); } catch (NumberFormatException e) { return; }
             player.giveExperiencePoints(xpPerBottle * quantity);
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "buy", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    quantity * entry.quantity(), totalPrice);
+            com.sellbox.mod.extras.ExtrasNotices.buy(player, "extras.notice.buy.title", new Object[0],
+                    "extras.notice.buy.text", new Object[]{quantity * entry.quantity(), totalPrice});
             settle(player, category, entry, quantity);
             sendActionMessage(player, "message.sellbox.trade_success_buy");
             return;
@@ -376,6 +458,10 @@ public class ModNetwork {
             if (excessOffer > 0) {
                 player.getInventory().placeItemBackInInventory(offerTemplate.copyWithCount(excessOffer));
             }
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "barter", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    actualUnits * entry.quantity(), 0L);
+            com.sellbox.mod.extras.ExtrasNotices.buy(player, "extras.notice.barter.title", new Object[0],
+                    "extras.notice.barter.text", new Object[]{actualUnits * entry.quantity()});
             settle(player, category, entry, actualUnits);
             sendActionMessage(player, "message.sellbox.trade_success_barter");
             return;
@@ -398,6 +484,10 @@ public class ModNetwork {
                 player.getInventory().placeItemBackInInventory(template.copyWithCount(chunk));
                 totalItems -= chunk;
             }
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "buy", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    quantity * entry.quantity(), totalPrice);
+            com.sellbox.mod.extras.ExtrasNotices.buy(player, "extras.notice.buy.title", new Object[0],
+                    "extras.notice.buy.text", new Object[]{quantity * entry.quantity(), totalPrice});
             settle(player, category, entry, quantity);
             sendActionMessage(player, "message.sellbox.trade_success_buy");
         } else if (entry.tradeType() == ShopEntry.TradeType.SELL) {
@@ -430,6 +520,10 @@ public class ModNetwork {
                 SellBoxEconomy.addBalance(player, earned);
                 sendBalanceToPlayer(player);
             }
+            com.sellbox.mod.extras.ExtrasMailbox.record(player, "sale", com.sellbox.mod.extras.ExtrasMailbox.SRC_SHOP, entry.itemId().toString(),
+                    actualQty * qtyPerUnit, earned);
+            com.sellbox.mod.extras.ExtrasNotices.sale(player, "extras.notice.sale.title", new Object[0],
+                    "extras.notice.sale.text", new Object[]{actualQty * qtyPerUnit, earned});
             settle(player, category, entry, actualQty);
             sendActionMessage(player, "message.sellbox.trade_success_sell");
         }
@@ -640,16 +734,20 @@ public class ModNetwork {
     public record SyncShopConfigPacket(
             boolean sdmEnabled,
             boolean shopOverrideEnabled,
-            boolean editMode
+            boolean editMode,
+            boolean vssEnabled,
+            boolean extrasEnabled
     ) {
         static void encode(SyncShopConfigPacket msg, FriendlyByteBuf buf) {
             buf.writeBoolean(msg.sdmEnabled);
             buf.writeBoolean(msg.shopOverrideEnabled);
             buf.writeBoolean(msg.editMode);
+            buf.writeBoolean(msg.vssEnabled);
+            buf.writeBoolean(msg.extrasEnabled);
         }
 
         static SyncShopConfigPacket decode(FriendlyByteBuf buf) {
-            return new SyncShopConfigPacket(buf.readBoolean(), buf.readBoolean(), buf.readBoolean());
+            return new SyncShopConfigPacket(buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean());
         }
 
         static void handle(SyncShopConfigPacket msg, Supplier<NetworkEvent.Context> ctx) {
@@ -658,6 +756,8 @@ public class ModNetwork {
                 clientSdmEnabled = msg.sdmEnabled;
                 clientShopOverride = msg.shopOverrideEnabled;
                 clientEditMode = msg.editMode;
+                clientVssEnabled = msg.vssEnabled;
+                clientExtrasEnabled = msg.extrasEnabled;
             });
             ctx.get().setPacketHandled(true);
         }
@@ -1060,6 +1160,10 @@ public class ModNetwork {
                     buyer.getName().getString(), shopName, itemName, actualUnits, ownerPayout);
             market.writeReceipt(buyer.getName().getString(), receiptText);
             PlayerShopConfig.addEarnings(msg.shopOwnerUUID(), ownerPayout, actualUnits);
+            com.sellbox.mod.extras.ExtrasMailbox.record(buyer, "buy", com.sellbox.mod.extras.ExtrasMailbox.SRC_MARKET, entry.itemId().toString(),
+                    actualUnits * qtyPerUnit, ownerPayout);
+            com.sellbox.mod.extras.ExtrasNotices.buy(buyer, "extras.notice.buy.title", new Object[0],
+                    "extras.notice.buy.text", new Object[]{actualUnits * qtyPerUnit, ownerPayout});
             sendActionMessage(buyer, "message.sellbox.trade_success_buy");
         }
 
@@ -1118,6 +1222,10 @@ public class ModNetwork {
             String receiptText = String.format("%s 向 %s 出售了 %s x%d，获得 %d 金币",
                     seller.getName().getString(), shopName, itemName, actualUnits, sellerPayout);
             market.writeReceipt(seller.getName().getString(), receiptText);
+            com.sellbox.mod.extras.ExtrasMailbox.record(seller, "sale", com.sellbox.mod.extras.ExtrasMailbox.SRC_MARKET, entry.itemId().toString(),
+                    toSell, sellerPayout);
+            com.sellbox.mod.extras.ExtrasNotices.sale(seller, "extras.notice.sale.title", new Object[0],
+                    "extras.notice.sale.text", new Object[]{toSell, sellerPayout});
             sendActionMessage(seller, "message.sellbox.trade_success_sell");
         }
 
@@ -1729,11 +1837,29 @@ public class ModNetwork {
         }
     }
 
+    public static void sendExtrasState(ServerPlayer player, String json) {
+        sendToPlayer(player, new ExtrasStatePacket(json));
+    }
+
+    public static void sendExtrasResponse(ServerPlayer player, String json) {
+        sendToPlayer(player, new ExtrasResponsePacket(json));
+    }
+
+    public static void sendExtrasNotice(ServerPlayer player, String json) {
+        sendToPlayer(player, new ExtrasNoticePacket(json));
+    }
+
+    public static void sendExtrasRequest(String json) {
+        CHANNEL.sendToServer(new ExtrasRequestPacket(json));
+    }
+
     public static void sendShopConfigToPlayer(ServerPlayer player) {
         sendToPlayer(player, new SyncShopConfigPacket(
                 SellBoxConfig.isSdmCurrencyEnabled(),
                 SellBoxConfig.isShopOverrideEnabled(),
-                ShopConfig.isEditMode() && player.hasPermissions(2)
+                ShopConfig.isEditMode() && player.hasPermissions(2),
+                SellBoxConfig.isVssCurrencyEnabled(),
+                SellBoxConfig.isExtrasEnabled()
         ));
     }
 
@@ -1858,6 +1984,16 @@ public class ModNetwork {
                 SetEntryQuestPacket::encode, SetEntryQuestPacket::decode, SetEntryQuestPacket::handle);
         CHANNEL.registerMessage(id++, SetEntryLimitPacket.class,
                 SetEntryLimitPacket::encode, SetEntryLimitPacket::decode, SetEntryLimitPacket::handle);
+
+        // Extras（签到/邮箱/兑换/转账/兑换码/好友）
+        CHANNEL.registerMessage(id++, ExtrasStatePacket.class,
+                ExtrasStatePacket::encode, ExtrasStatePacket::decode, ExtrasStatePacket::handle);
+        CHANNEL.registerMessage(id++, ExtrasResponsePacket.class,
+                ExtrasResponsePacket::encode, ExtrasResponsePacket::decode, ExtrasResponsePacket::handle);
+        CHANNEL.registerMessage(id++, ExtrasNoticePacket.class,
+                ExtrasNoticePacket::encode, ExtrasNoticePacket::decode, ExtrasNoticePacket::handle);
+        CHANNEL.registerMessage(id++, ExtrasRequestPacket.class,
+                ExtrasRequestPacket::encode, ExtrasRequestPacket::decode, ExtrasRequestPacket::handle);
 
         CHANNEL.registerMessage(id++, RequestBalancePacket.class,
                 RequestBalancePacket::encode, RequestBalancePacket::decode, RequestBalancePacket::handle);

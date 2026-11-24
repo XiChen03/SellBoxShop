@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.util.FontUtil;
 import com.sellbox.mod.util.ItemIcons;
 import net.minecraft.client.Minecraft;
@@ -13,6 +15,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class PlayerInventoryPickerScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private static final float ZOOM = 1.5f; // 整体放大倍率
     private final Screen parentScreen;
     private final Consumer<ItemStack> onSelect;
@@ -68,11 +72,11 @@ public class PlayerInventoryPickerScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, 0xFF333333);
-        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, 0xFFFFAA00);
+        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, T.popupBg);
+        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, T.accentStripe);
         super.render(g, mx, my, pt);
 
-        FontUtil.drawAutoFitCentered(g, font, title.getString(), panelLeft + panelW / 2, panelTop + (int)(6 * sf), panelW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, title.getString(), panelLeft + panelW / 2, panelTop + (int)(6 * sf), panelW - 10, T.textTitle);
 
         // 背包物品网格
         int startIdx = scrollOffset;
@@ -88,14 +92,14 @@ public class PlayerInventoryPickerScreen extends Screen {
 
             boolean hovered = mx >= x && mx < x + cellW && my >= y && my < y + cellH;
             if (hovered) {
-                g.fill(x + 1, y + 1, x + cellW - 1, y + cellH - 1, 0x404488FF);
+                g.fill(x + 1, y + 1, x + cellW - 1, y + cellH - 1, T.cellSelectedFill);
             }
 
             // 边框
-            g.fill(x + 2, y, x + cellW - 2, y + 1, 0xFF444444);
-            g.fill(x + 2, y + cellH - 1, x + cellW - 2, y + cellH, 0xFF444444);
-            g.fill(x, y + 2, x + 1, y + cellH - 2, 0xFF444444);
-            g.fill(x + cellW - 1, y + 2, x + cellW, y + cellH - 2, 0xFF444444);
+            g.fill(x + 2, y, x + cellW - 2, y + 1, GuiDraw.frameColor());
+            g.fill(x + 2, y + cellH - 1, x + cellW - 2, y + cellH, GuiDraw.frameColor());
+            g.fill(x, y + 2, x + 1, y + cellH - 2, GuiDraw.frameColor());
+            g.fill(x + cellW - 1, y + 2, x + cellW, y + cellH - 2, GuiDraw.frameColor());
 
             ItemStack stack = inventoryItems.get(i);
             // 物品图标：放大 ZOOM 倍并居中（16px → 16*ZOOM px）
@@ -113,7 +117,7 @@ public class PlayerInventoryPickerScreen extends Screen {
                 g.pose().pushPose();
                 g.pose().translate(0, 0, 200);
                 g.pose().translate(qtyX, qtyY, 0);
-                g.drawString(font, countStr, 0, 0, 0xFFFFFF, true);
+                g.drawString(font, countStr, 0, 0, T.textPrimary,GuiDraw.shadow());
                 g.pose().popPose();
             }
         }

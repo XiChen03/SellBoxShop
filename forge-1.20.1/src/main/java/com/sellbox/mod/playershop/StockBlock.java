@@ -50,6 +50,24 @@ public class StockBlock extends BaseEntityBlock {
     }
 
     @Override
+    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
+        if (level.isClientSide) return true;
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof StockBlockEntity stock) {
+            UUID owner = stock.getOwner();
+            if (owner != null && !owner.equals(player.getUUID())) {
+                if (!player.isCreative()) {
+                    if (player instanceof ServerPlayer sp) {
+                        sp.sendSystemMessage(Component.translatable("message.sellbox.not_owner_break", stock.getOwnerName()));
+                    }
+                    return false;
+                }
+            }
+        }
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+    }
+
+    @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return SHAPE;
     }

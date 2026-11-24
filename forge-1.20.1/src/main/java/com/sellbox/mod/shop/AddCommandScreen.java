@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.Minecraft;
@@ -11,6 +13,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 public class AddCommandScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private float sf;
     private int panelLeft, panelTop, panelW, panelH;
     private int cx;
@@ -118,14 +122,14 @@ public class AddCommandScreen extends Screen {
         btnRowY = curY;
 
         int lx = panelLeft + pad;
-        commandBox = new EditBox(font, lx + (int) Math.round(2 * sf), commandBoxY + 1, fieldW - (int) Math.round(4 * sf), boxH - 2, Component.literal(""));
+        commandBox = new EditBox(font, GuiDraw.innerTextX(lx), GuiDraw.innerTextY(commandBoxY, boxH), GuiDraw.innerWidth(fieldW), boxH - 2, Component.literal(""));
         commandBox.setBordered(false);
         commandBox.setMaxLength(256);
         if (editEntry != null) commandBox.setValue(editEntry.extraData());
         addRenderableWidget(commandBox);
 
         int priceW = (int) Math.round(80 * sf);
-        priceBox = new EditBox(font, lx + (int) Math.round(2 * sf), priceBoxY + 1, priceW - (int) Math.round(4 * sf), boxH - 2, Component.literal(""));
+        priceBox = new EditBox(font, GuiDraw.innerTextX(lx), GuiDraw.innerTextY(priceBoxY, boxH), GuiDraw.innerWidth(priceW), boxH - 2, Component.literal(""));
         priceBox.setBordered(false);
         priceBox.setFilter(s -> s.matches("\\d*"));
         if (editEntry != null) priceBox.setValue(String.valueOf(editEntry.price()));
@@ -153,13 +157,13 @@ public class AddCommandScreen extends Screen {
                             hasPendingForm = true;
                         }));}));
 
-        nameBox = new EditBox(font, lx + (int) Math.round(2 * sf), nameBoxY + 1, fieldW - (int) Math.round(4 * sf), boxH - 2, Component.literal(""));
+        nameBox = new EditBox(font, GuiDraw.innerTextX(lx), GuiDraw.innerTextY(nameBoxY, boxH), GuiDraw.innerWidth(fieldW), boxH - 2, Component.literal(""));
         nameBox.setBordered(false);
         nameBox.setMaxLength(64);
         if (editEntry != null) nameBox.setValue(editEntry.customName());
         addRenderableWidget(nameBox);
 
-        iconBox = new EditBox(font, lx + (int) Math.round(2 * sf), iconBoxY + 1, fieldW - (int) Math.round(4 * sf), boxH - 2, Component.literal(""));
+        iconBox = new EditBox(font, GuiDraw.innerTextX(lx), GuiDraw.innerTextY(iconBoxY, boxH), GuiDraw.innerWidth(fieldW), boxH - 2, Component.literal(""));
         iconBox.setBordered(false);
         if (editEntry != null) {
             iconBox.setValue(editEntry.itemId().toString());
@@ -205,46 +209,43 @@ public class AddCommandScreen extends Screen {
         parentScreen.refreshFromConfig();
     }
 
-    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {
-        g.fill(0, 0, this.width, this.height, 0xC0000000);
+    public void renderBackground(GuiGraphics g) {
+        // 背景在 render 开头自绘，这里阻止原版再盖一层
     }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        g.fill(0, 0, this.width, this.height, T.scrim);
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
-        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, 0xFF333333);
-        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, 0xFFFFAA00);
+        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, T.popupBg);
+        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, T.accentStripe);
 
         super.render(g, mx, my, pt);
 
-        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, panelTop + (int) Math.round(8 * sf), panelW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, panelTop + (int) Math.round(8 * sf), panelW - 10, T.textTitle);
 
         int lx = panelLeft + (int) Math.round(15 * sf);
 
         drawStyledBox(g, lx, commandBoxY, fieldW, boxH, commandBox.isFocused());
-        FontUtil.drawAutoFitText(g, font, "指令 (不含/):", lx, commandLabelY, fieldW, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "指令 (不含/):", lx, commandLabelY, fieldW, T.textPrimary);
 
         int priceW = (int) Math.round(80 * sf);
         drawStyledBox(g, lx, priceBoxY, priceW, boxH, priceBox.isFocused());
-        FontUtil.drawAutoFitText(g, font, "价格:", lx, priceLabelY, fieldW, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "价格:", lx, priceLabelY, fieldW, T.textPrimary);
 
         drawStyledBox(g, lx, iconBoxY, fieldW, boxH, iconBox.isFocused());
-        FontUtil.drawAutoFitText(g, font, "图标物品ID:", lx, iconLabelY, fieldW, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "图标物品ID:", lx, iconLabelY, fieldW, T.textPrimary);
 
         drawStyledBox(g, lx, nameBoxY, fieldW, boxH, nameBox.isFocused());
-        FontUtil.drawAutoFitText(g, font, "自定义名称:", lx, nameLabelY, fieldW, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "自定义名称:", lx, nameLabelY, fieldW, T.textPrimary);
         if (nameBox.getValue().isEmpty() && !nameBox.isFocused()) {
-            FontUtil.drawAutoFitText(g, font, "可选，留空则默认显示指令", lx + (int) Math.round(6 * sf), nameBoxY + (int) Math.round(3 * sf), fieldW - (int) Math.round(12 * sf), 0x777777);
+            FontUtil.drawAutoFitText(g, font, "可选，留空则默认显示指令", GuiDraw.innerTextX(lx), GuiDraw.innerTextY(nameBoxY, boxH), fieldW - (int) Math.round(12 * sf), T.textHint);
         }
     }
 
     private void drawStyledBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     @Override

@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.network.ModNetwork;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.Minecraft;
@@ -9,6 +11,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public class AddXpScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private int popupW = 260;
     private int popupH = 200;
 
@@ -50,7 +54,7 @@ public class AddXpScreen extends Screen {
         int btnW = (int) Math.round(60 * sf);
         int btnH = (int) Math.round(20 * sf);
 
-        this.xpBox = new EditBox(font, cx - boxW / 2, top + (int)(48 * sf), boxW, boxH, Component.literal("1"));
+        this.xpBox = new EditBox(font, cx - boxW / 2 + GuiDraw.textPadX(), GuiDraw.innerTextY(top + (int)(48 * sf), boxH), GuiDraw.innerWidth(boxW), boxH, Component.literal("1"));
         this.xpBox.setBordered(false);
         this.xpBox.setFilter(s -> s.matches("\\d*"));
         if (editEntry != null) {
@@ -58,7 +62,7 @@ public class AddXpScreen extends Screen {
         }
         this.addRenderableWidget(this.xpBox);
 
-        this.priceBox = new EditBox(font, cx - boxW / 2, top + (int)(86 * sf), boxW, boxH, Component.literal("1"));
+        this.priceBox = new EditBox(font, cx - boxW / 2 + GuiDraw.textPadX(), GuiDraw.innerTextY(top + (int)(86 * sf), boxH), GuiDraw.innerWidth(boxW), boxH, Component.literal("1"));
         this.priceBox.setBordered(false);
         this.priceBox.setFilter(s -> s.matches("\\d*"));
         if (editEntry != null) priceBox.setValue(String.valueOf(editEntry.price()));
@@ -87,12 +91,13 @@ public class AddXpScreen extends Screen {
         parentScreen.refreshFromConfig();
     }
 
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0xC0000000);
+    public void renderBackground(GuiGraphics g) {
+        // 背景在 render 开头自绘，这里阻止原版再盖一层
     }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        g.fill(0, 0, this.width, this.height, T.scrim);
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
         int cx = width / 2;
@@ -100,13 +105,13 @@ public class AddXpScreen extends Screen {
         int left = cx - popupW / 2;
         int top = cy - popupH / 2;
 
-        fillRoundedRect(g, left, top, popupW, popupH, 0xFF333333);
-        g.fill(left + 2, top, left + popupW - 2, top + 1, 0xFFFFAA00);
+        fillRoundedRect(g, left, top, popupW, popupH, T.popupBg);
+        g.fill(left + 2, top, left + popupW - 2, top + 1, T.accentStripe);
         float s = (float) ShopUI.getScale(height);
-        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, top + (int)(8 * s), popupW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, title.getString(), cx, top + (int)(8 * s), popupW - 10, T.textTitle);
 
         Component hint = Component.literal("此选项仅可设置购买经验");
-        FontUtil.drawAutoFitCentered(g, font, hint.getString(), cx, top + (int)(22 * s), popupW - 10, 0xAAAAAA);
+        FontUtil.drawAutoFitCentered(g, font, hint.getString(), cx, top + (int)(22 * s), popupW - 10, T.textMuted);
 
         super.render(g, mx, my, pt);
 
@@ -116,16 +121,12 @@ public class AddXpScreen extends Screen {
         drawBox(g, boxX, top + (int)(48 * s), boxW, boxH, xpBox.isFocused());
         drawBox(g, boxX, top + (int)(86 * s), boxW, boxH, priceBox.isFocused());
 
-        FontUtil.drawAutoFitCentered(g, font, "每瓶经验值:", cx, top + (int)(36 * s), popupW - 20, 0xFFFFFF);
-        FontUtil.drawAutoFitCentered(g, font, "价格:", cx, top + (int)(74 * s), popupW - 20, 0xFFFFFF);
+        FontUtil.drawAutoFitCentered(g, font, "每瓶经验值:", cx, top + (int)(36 * s), popupW - 20, T.textPrimary);
+        FontUtil.drawAutoFitCentered(g, font, "价格:", cx, top + (int)(74 * s), popupW - 20, T.textPrimary);
     }
 
     private void drawBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

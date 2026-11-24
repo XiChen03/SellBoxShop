@@ -22,6 +22,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
+import com.sellbox.mod.item.GoldCoinItem;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -140,6 +142,11 @@ public class SellBoxEvents {
             processSellBoxes(level);
         }
 
+        if (dimId.equals("minecraft:overworld")) {
+            com.sellbox.mod.extras.ExtrasAutoExchange.tick(level);
+            com.sellbox.mod.extras.ExtrasSweeper.tick(level.getServer());
+        }
+
         if (dimId.equals("minecraft:overworld") && SDMShopIntegration.isLoaded() && SellBoxConfig.isSdmCurrencyEnabled()) {
             vssSyncTick++;
             if (vssSyncTick >= 20) {
@@ -253,6 +260,39 @@ public class SellBoxEvents {
         SellBoxBlockEntity.forEachLoadedSellBox(level, SellBoxBlockEntity::sellItems);
     }
 
+    /**
+     * 金币物品被拾取时直接转成余额，不再进入背包，避免玩家还要手动使用。
+     * 事件只在地面物品被捡起时触发，成本远低于每 tick 扫描背包。
+     */
+    @SubscribeEvent
+    public static void onCoinPickup(EntityItemPickupEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        ItemStack stack = event.getItem().getItem();
+        if (stack.isEmpty()) return;
+        int count = stack.getCount();
+        if (count <= 0) return;
+        if (stack.getItem() instanceof GoldCoinItem) {
+            event.setCanceled(true);
+            event.getItem().discard();
+            SellBoxEconomy.addBalance(player, count);
+            ModNetwork.sendBalanceToPlayer(player);
+            player.displayClientMessage(Component.translatable("message.sellbox.coin_used", count), true);
+            return;
+        }
+        // 其它转换表物品在拾取瞬间直接换入，不进背包
+        if (!com.sellbox.mod.extras.ExtrasConfigFile.isAutoExchange()) return;
+        long rate = com.sellbox.mod.extras.ExtrasConfigFile.rateOf(
+                com.sellbox.mod.extras.ExtrasItems.keyOf(stack));
+        if (rate <= 0) return;
+        event.setCanceled(true);
+        event.getItem().discard();
+        long gain = rate * count;
+        SellBoxEconomy.addBalance(player, (int) Math.min(Integer.MAX_VALUE, gain));
+        ModNetwork.sendBalanceToPlayer(player);
+        player.displayClientMessage(Component.translatable(
+                "message.sellbox.exchange_auto", count, gain), true);
+    }
+
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
@@ -267,6 +307,9 @@ public class SellBoxEvents {
         ModNetwork.sendAdminEditToPlayer(player);
         ModNetwork.sendQuestListToPlayer(player);
         ModNetwork.sendAllShopEntriesToPlayer(player);
+
+        // 邮箱互联：新玩家首次上线自动推送欢迎邮件
+        com.sellbox.mod.extras.ExtrasMailbox.sendWelcomeIfNeeded(player);
 
         UUID playerUuid = player.getUUID();
 

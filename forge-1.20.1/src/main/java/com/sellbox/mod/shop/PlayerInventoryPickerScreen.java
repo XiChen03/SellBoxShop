@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.util.FontUtil;
 import com.sellbox.mod.util.ItemIcons;
 import net.minecraft.client.Minecraft;
@@ -13,6 +15,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class PlayerInventoryPickerScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private final Screen parentScreen;
     private final Consumer<ItemStack> onSelect;
     private List<ItemStack> inventoryItems = new ArrayList<>();
@@ -64,19 +68,20 @@ public class PlayerInventoryPickerScreen extends Screen {
                 btn -> { if (minecraft == null) minecraft = Minecraft.getInstance(); minecraft.setScreen(parentScreen); }));
     }
 
-    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {
-        g.fill(0, 0, this.width, this.height, 0xC0000000);
+    public void renderBackground(GuiGraphics g) {
+        // 背景在 render 开头自绘，这里阻止原版再盖一层
     }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        g.fill(0, 0, this.width, this.height, T.scrim);
         if (this.minecraft == null) this.minecraft = Minecraft.getInstance();
         if (this.font == null) this.font = Minecraft.getInstance().font;
-        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, 0xFF333333);
-        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, 0xFFFFAA00);
+        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, T.popupBg);
+        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, T.accentStripe);
         super.render(g, mx, my, pt);
 
-        FontUtil.drawAutoFitCentered(g, font, title.getString(), panelLeft + panelW / 2, panelTop + (int)(6 * sf), panelW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, title.getString(), panelLeft + panelW / 2, panelTop + (int)(6 * sf), panelW - 10, T.textTitle);
 
         int startIdx = scrollOffset;
         int vis = COLS * ROWS;
@@ -91,13 +96,13 @@ public class PlayerInventoryPickerScreen extends Screen {
 
             boolean hovered = mx >= x && mx < x + cellW && my >= y && my < y + cellH;
             if (hovered) {
-                g.fill(x + 1, y + 1, x + cellW - 1, y + cellH - 1, 0x404488FF);
+                g.fill(x + 1, y + 1, x + cellW - 1, y + cellH - 1, T.cellSelectedFill);
             }
 
-            g.fill(x + 2, y, x + cellW - 2, y + 1, 0xFF444444);
-            g.fill(x + 2, y + cellH - 1, x + cellW - 2, y + cellH, 0xFF444444);
-            g.fill(x, y + 2, x + 1, y + cellH - 2, 0xFF444444);
-            g.fill(x + cellW - 1, y + 2, x + cellW, y + cellH - 2, 0xFF444444);
+            g.fill(x + 2, y, x + cellW - 2, y + 1, GuiDraw.frameColor());
+            g.fill(x + 2, y + cellH - 1, x + cellW - 2, y + cellH, GuiDraw.frameColor());
+            g.fill(x, y + 2, x + 1, y + cellH - 2, GuiDraw.frameColor());
+            g.fill(x + cellW - 1, y + 2, x + cellW, y + cellH - 2, GuiDraw.frameColor());
 
             ItemStack stack = inventoryItems.get(i);
             // 放大渲染物品图标

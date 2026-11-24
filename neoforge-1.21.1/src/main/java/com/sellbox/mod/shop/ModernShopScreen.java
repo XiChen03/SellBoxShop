@@ -1,6 +1,7 @@
 package com.sellbox.mod.shop;
 
 import com.sellbox.mod.SellBoxMod;
+import com.sellbox.mod.gui.GuiDraw;
 import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.shop.network.ShopDataPayload;
 import com.sellbox.mod.util.ItemIcons;
@@ -86,6 +87,11 @@ public class ModernShopScreen extends Screen {
         cellH = Math.round(52 * scale);
         gridW = rightW - 16;
         gridH = panelH - 44;
+    }
+
+    /** 背景由本界面自己绘制，阻止原版在 super.render 时再盖一层渐变背景 */
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -233,10 +239,10 @@ public class ModernShopScreen extends Screen {
         // 单元格背景
         g.fill(x, y, x + cellW, y + cellH, hovered ? T.cellHoveredFill : T.leftPanelBg);
         // 边框
-        g.fill(x, y, x + cellW, y + 1, T.cellBorder);
-        g.fill(x, y + cellH - 1, x + cellW, y + cellH, T.cellBorder);
-        g.fill(x, y, x + 1, y + cellH, T.cellBorder);
-        g.fill(x + cellW - 1, y, x + cellW, y + cellH, T.cellBorder);
+        g.fill(x, y, x + cellW, y + 1, GuiDraw.frameColor());
+        g.fill(x, y + cellH - 1, x + cellW, y + cellH, GuiDraw.frameColor());
+        g.fill(x, y, x + 1, y + cellH, GuiDraw.frameColor());
+        g.fill(x + cellW - 1, y, x + cellW, y + cellH, GuiDraw.frameColor());
 
         // 物品图标
         ItemStack stack = entry.createStack();
@@ -305,11 +311,11 @@ public class ModernShopScreen extends Screen {
 
     private void drawCenteredText(GuiGraphics g, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
         int w = font.width(text);
-        g.drawString(font, text, x - w / 2, y, color, true);
+        g.drawString(font, text, x - w / 2, y, color,GuiDraw.shadow());
     }
 
     private void drawText(GuiGraphics g, net.minecraft.client.gui.Font font, String text, int x, int y, int color) {
-        g.drawString(font, text, x, y, color, true);
+        g.drawString(font, text, x, y, color,GuiDraw.shadow());
     }
 
     @Override

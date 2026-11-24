@@ -17,11 +17,16 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * @param perPlayer    true = 每个玩家各自计算，false = 全体共用一个额度
  */
 public record SetEntryLimitPacket(String category, int index, int limit, boolean perPlayer) implements CustomPacketPayload {
+    /** null 安全：任何 String 字段透传前都过一遍，避免 EncoderException 把玩家踢下线 */
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
     public static final Type<SetEntryLimitPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SellBoxMod.MODID, "set_entry_limit"));
 
     public static final StreamCodec<FriendlyByteBuf, SetEntryLimitPacket> CODEC = StreamCodec.of(
             (buf, payload) -> {
-                buf.writeUtf(payload.category);
+                buf.writeUtf(safe(payload.category));
                 buf.writeVarInt(payload.index);
                 buf.writeVarInt(payload.limit);
                 buf.writeBoolean(payload.perPlayer);

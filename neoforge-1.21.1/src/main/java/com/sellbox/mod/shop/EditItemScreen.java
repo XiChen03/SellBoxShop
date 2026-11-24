@@ -1,5 +1,7 @@
 package com.sellbox.mod.shop;
 
+import com.sellbox.mod.gui.GuiDraw;
+import com.sellbox.mod.gui.GuiTheme;
 import com.sellbox.mod.shop.network.ShopEditPayload;
 import com.sellbox.mod.util.FontUtil;
 import net.minecraft.client.gui.GuiGraphics;
@@ -10,6 +12,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class EditItemScreen extends Screen {
+    /** 主题对象身份恒定，切换主题就地刷新 */
+    private final GuiTheme T = GuiTheme.get();
     private float sf;
     private int panelLeft, panelTop, panelW, panelH;
     private int cx;
@@ -79,14 +83,14 @@ public class EditItemScreen extends Screen {
         int btnRowY = curY;
 
         int idFieldW = (int) Math.round(150 * sf);
-        this.idBox = new EditBox(this.font, lx + (int) Math.round(60 * sf), idBoxY + 1, idFieldW, boxH - 2,
+        this.idBox = new EditBox(this.font, GuiDraw.innerTextX(lx + (int) Math.round(60 * sf)), GuiDraw.innerTextY(idBoxY, boxH), GuiDraw.innerWidth((int) Math.round(150 * sf)), boxH - 2,
                 Component.literal("物品ID"));
         this.idBox.setBordered(false);
         this.idBox.setValue(originalEntry != null ? originalEntry.itemId().toString() : "minecraft:");
         this.addRenderableWidget(this.idBox);
 
         int priceFieldW = (int) Math.round(80 * sf);
-        this.priceBox = new EditBox(this.font, lx + (int) Math.round(60 * sf), priceBoxY + 1, priceFieldW, boxH - 2,
+        this.priceBox = new EditBox(this.font, GuiDraw.innerTextX(lx + (int) Math.round(60 * sf)), GuiDraw.innerTextY(priceBoxY, boxH), GuiDraw.innerWidth((int) Math.round(80 * sf)), boxH - 2,
                 Component.literal("价格"));
         this.priceBox.setBordered(false);
         this.priceBox.setValue(originalEntry != null ? String.valueOf(originalEntry.price()) : "1");
@@ -157,12 +161,12 @@ public class EditItemScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, 0xFF333333);
-        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, 0xFFFFAA00);
+        fillRoundedRect(g, panelLeft, panelTop, panelW, panelH, T.popupBg);
+        g.fill(panelLeft + 2, panelTop, panelLeft + panelW - 2, panelTop + 1, T.accentStripe);
         super.render(g, mx, my, pt);
 
         String titleStr = isAdding ? "添加商品" : "编辑商品";
-        FontUtil.drawAutoFitCentered(g, font, titleStr, cx, panelTop + (int) Math.round(8 * sf), panelW - 10, 0xFFFFAA);
+        FontUtil.drawAutoFitCentered(g, font, titleStr, cx, panelTop + (int) Math.round(8 * sf), panelW - 10, T.textTitle);
 
         int pad = (int) Math.round(15 * sf);
         int lx = panelLeft + pad;
@@ -184,21 +188,17 @@ public class EditItemScreen extends Screen {
         int tradeLabelY = curY;
         curY += labelH + (int) Math.round(2 * sf);
 
-        FontUtil.drawAutoFitText(g, font, "物品ID:", lx, labelY, 60, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "物品ID:", lx, labelY, 60, T.textPrimary);
         drawStyledBox(g, lx + (int) Math.round(60 * sf), idBoxY, (int) Math.round(150 * sf), boxH, idBox.isFocused());
 
-        FontUtil.drawAutoFitText(g, font, "价格:", lx, priceLabelY, 60, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "价格:", lx, priceLabelY, 60, T.textPrimary);
         drawStyledBox(g, lx + (int) Math.round(60 * sf), priceBoxY, (int) Math.round(80 * sf), boxH, priceBox.isFocused());
 
-        FontUtil.drawAutoFitText(g, font, "类型:", lx, tradeLabelY, 60, 0xFFFFFF);
+        FontUtil.drawAutoFitText(g, font, "类型:", lx, tradeLabelY, 60, T.textPrimary);
     }
 
     private void drawStyledBox(GuiGraphics g, int x, int y, int w, int h, boolean focused) {
-        int col = focused ? 0x55FFFFFF : 0x55AAAAAA;
-        g.fill(x + 2, y, x + w - 2, y + 1, col);
-        g.fill(x + 2, y + h - 1, x + w - 2, y + h, col);
-        g.fill(x, y + 2, x + 1, y + h - 2, col);
-        g.fill(x + w - 1, y + 2, x + w, y + h - 2, col);
+        GuiDraw.inputBox(g, x, y, w, h, focused);
     }
 
     private void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int color) {

@@ -5,8 +5,6 @@ Forge 1.20.1 与 NeoForge 1.21.1 双端模组，源码整合目录。
 > 完整代码索引（包职责、逐类说明、关键流程、两端差异、待办）：[docs/PROJECT_INDEX.md](docs/PROJECT_INDEX.md)
 >
 > 发布用完整功能与指令说明：[docs/MOD_DESCRIPTION.md](docs/MOD_DESCRIPTION.md)
->
-> GitHub 推送与 SSH 密钥说明：[docs/GITHUB_PUSH.md](docs/GITHUB_PUSH.md)
 
 ## 目录结构
 

@@ -47,10 +47,3 @@ cd neoforge-1.21.1
 | 鼠标滚轮 | `mouseScrolled(x,y,d)` | `mouseScrolled(x,y,dxy)` |
 | 配置存储 | 存档级 `{world}/config/SellBox/` | 同左 |
 | TAB 集成 | `TabIntegration`（反射） | `TabIntegration`（反射） |
-
-## 原始位置（备份，未删除）
-
-- `C:\AI\Forge-1.20.1-SellBox`
-- `C:\AI\NeoForge-1.21.1-SellBox`
-
-本目录为源码副本，修改不同步。确认无误后请以本目录为准。
